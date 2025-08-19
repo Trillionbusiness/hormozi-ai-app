@@ -100,11 +100,15 @@ const App: React.FC = () => {
             { name: "Creating Your Growth Tracker...", fn: () => generateAccountabilityTracker(businessData), key: 'accountabilityTracker' },
         ];
         
+        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
         for (let i = 0; i < steps.length; i++) {
             setLoadingText(steps[i].name);
             // @ts-ignore
             fullPlaybook[steps[i].key] = await steps[i].fn();
             setLoadingProgress(((i + 1) / steps.length) * 100);
+            // Add a delay to avoid hitting API rate limits
+            if (i < steps.length - 1) await delay(2000);
         }
         
         const finalPlaybook = fullPlaybook as GeneratedPlaybook;
@@ -229,21 +233,29 @@ const App: React.FC = () => {
     setAssetForPdf(null);
 
     try {
-        const totalAssets = offer.stack.filter(item => item.asset).length;
+        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+        const assetsToProcess = offer.stack.filter(item => item.asset);
+        const totalAssets = assetsToProcess.length;
         let assetsProcessed = 0;
+        const processedStack: OfferStackItem[] = [];
         
-        const processedStack = await Promise.all(
-            offer.stack.map(async (item) => {
-                if (!item.asset) return item;
-                let newContent = item.asset.content;
-                if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, currentUser.businessData!);
-                }
-                assetsProcessed++;
-                setPdfProgress((assetsProcessed / totalAssets) * 90); // Process up to 90%
-                return { ...item, asset: { ...item.asset, content: newContent } };
-            })
-        );
+        // Create a map of the original stack for easy lookup
+        const originalStackMap = new Map(offer.stack.map((item, index) => [index, item]));
+
+        for (const [index, item] of offer.stack.entries()) {
+             if (!item.asset) {
+                processedStack.push(item);
+                continue;
+            }
+            let newContent = item.asset.content;
+            if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
+                newContent = await generateAssetContent(item, currentUser.businessData!);
+                await delay(2000); // Add a delay after each generation
+            }
+            assetsProcessed++;
+            setPdfProgress((assetsProcessed / totalAssets) * 90); // Process up to 90%
+            processedStack.push({ ...item, asset: { ...item.asset, content: newContent } });
+        }
         
         const offerWithContent = { ...offer, stack: processedStack };
         setAssetBundleForPdf(offerWithContent);
@@ -258,31 +270,35 @@ const App: React.FC = () => {
   const processAllAssets = async (playbookToProcess: GeneratedPlaybook) => {
     if (!currentUser?.businessData) return playbookToProcess;
 
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
     const allOffers = [playbookToProcess.offer1, playbookToProcess.offer2, playbookToProcess.downsell.offer];
     const totalAssets = allOffers.reduce((sum, offer) => sum + offer.stack.filter(item => item.asset).length, 0);
     let assetsProcessed = 0;
 
     const processOffer = async (offer: GeneratedOffer) => {
-        const processedStack = await Promise.all(
-            offer.stack.map(async (item) => {
-                if (!item.asset) return item;
-                let newContent = item.asset.content;
-                if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, currentUser.businessData!);
-                }
-                assetsProcessed++;
-                setZipProgress((assetsProcessed / totalAssets) * 50); // Asset processing is first 50%
-                return { ...item, asset: { ...item.asset, content: newContent }};
-            })
-        );
+        const processedStack: OfferStackItem[] = [];
+        for (const item of offer.stack) {
+            if (!item.asset) {
+                processedStack.push(item);
+                continue;
+            }
+            let newContent = item.asset.content;
+            if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
+                newContent = await generateAssetContent(item, currentUser.businessData!);
+                await delay(2000); // Delay after each asset generation
+            }
+            assetsProcessed++;
+            setZipProgress((assetsProcessed / totalAssets) * 50); // Asset processing is first 50%
+            processedStack.push({ ...item, asset: { ...item.asset, content: newContent }});
+        }
         return { ...offer, stack: processedStack };
     };
 
-    const [processedOffer1, processedOffer2, processedDownsellOffer] = await Promise.all([
-        processOffer(playbookToProcess.offer1),
-        processOffer(playbookToProcess.offer2),
-        processOffer(playbookToProcess.downsell.offer)
-    ]);
+    // Now process offers serially as well.
+    const processedOffer1 = await processOffer(playbookToProcess.offer1);
+    const processedOffer2 = await processOffer(playbookToProcess.offer2);
+    const processedDownsellOffer = await processOffer(playbookToProcess.downsell.offer);
 
     return {
         ...playbookToProcess,
