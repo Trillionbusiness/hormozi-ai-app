@@ -5,7 +5,9 @@ import { businessExamples } from '../data/businessExamples';
 import { generateFieldSuggestion } from '../services/hormoziAiService';
 
 interface Step1FormProps {
-  onSubmit: (data: BusinessData) => void;
+  onSubmit: (data: BusinessData, credentials: {username: string, password: string}) => void;
+  onBackToLogin: () => void;
+  isSignupMode?: boolean;
 }
 
 const currencies = [
@@ -61,6 +63,7 @@ const InputField: React.FC<{
                 placeholder={placeholder}
                 className={`w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-gray-200 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition ${onAutofill ? 'pr-10' : ''}`}
                 required={required}
+                autoComplete={id === 'password' ? 'new-password' : 'off'}
             />
             {onAutofill && (
                 <button
@@ -130,7 +133,7 @@ const FormSectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }
     <h3 className="text-lg font-bold text-yellow-400 border-b border-gray-600 pb-2 mt-8 mb-6">{children}</h3>
 );
 
-const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
+const Step1Form: React.FC<Step1FormProps> = ({ onSubmit, onBackToLogin, isSignupMode = true }) => {
   const [formData, setFormData] = useState<BusinessData>({
     country: '',
     currency: '',
@@ -155,6 +158,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
     businessStage: 'existing',
     fundingStatus: undefined,
   });
+  const [credentials, setCredentials] = useState({username: '', password: ''});
 
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [generatingField, setGeneratingField] = useState<keyof BusinessData | null>(null);
@@ -173,9 +177,14 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
     });
   };
 
+  const handleCredentialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      setCredentials(prev => ({...prev, [name]: value}));
+  }
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit(formData, credentials);
   };
 
   const handleAutofill = () => {
@@ -217,6 +226,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
     }
   };
   
+  const headerTitle = isSignupMode ? 'Create Your Account & Plan' : 'Let\'s Create Your Plan';
   const subheaderText = formData.businessStage === 'new' 
     ? "Get ideas for a new venture, or describe your own."
     : "Describe your current business, or get examples to inspire you.";
@@ -224,7 +234,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
   return (
     <Card>
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Let's Create Your Plan.</h2>
+        <h2 className="text-2xl font-bold text-white">{headerTitle}</h2>
         <p className="text-gray-400 mt-2">{subheaderText}</p>
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
             <select
@@ -248,8 +258,17 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
         </div>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
+        {isSignupMode && (
+          <>
+            <FormSectionHeader>1. Create Your Account</FormSectionHeader>
+            <div className="grid md:grid-cols-2 gap-6">
+                <InputField id="username" label="Username" value={credentials.username} onChange={handleCredentialChange} placeholder="Choose a username" />
+                <InputField id="password" label="Password" value={credentials.password} onChange={handleCredentialChange} placeholder="Choose a secure password" type="password" />
+            </div>
+          </>
+        )}
 
-        <FormSectionHeader>1. Your Situation</FormSectionHeader>
+        <FormSectionHeader>{isSignupMode ? '2. Your Situation' : '1. Your Situation'}</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6 items-start">
             <RadioGroupField
                 id="businessStage"
@@ -275,7 +294,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             )}
         </div>
         
-        <FormSectionHeader>2. Your Business</FormSectionHeader>
+        <FormSectionHeader>{isSignupMode ? '3. Your Business' : '2. Your Business'}</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="businessType" label="Business Type or Idea" value={formData.businessType} onChange={handleChange} placeholder="e.g., SaaS, Coaching, Agency" onAutofill={() => handleGenerateField('businessType')} isAutofilling={generatingField === 'businessType'} />
             <InputField id="location" label="City & State/Province" value={formData.location} onChange={handleChange} placeholder="e.g., Austin, Texas" />
@@ -291,7 +310,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             <InputField id="monthlyRevenue" label="Current Monthly Revenue (use 0 for new ideas)" value={formData.monthlyRevenue} onChange={handleChange} placeholder="e.g., 50000" type="text" />
         </div>
 
-        <FormSectionHeader>3. Your Offer</FormSectionHeader>
+        <FormSectionHeader>{isSignupMode ? '4. Your Offer' : '3. Your Offer'}</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="marketingMethods" label="Current or Planned Marketing" value={formData.marketingMethods} onChange={handleChange} placeholder="e.g., Social Media, Referrals" onAutofill={() => handleGenerateField('marketingMethods')} isAutofilling={generatingField === 'marketingMethods'} />
             <InputField id="biggestChallenge" label="Biggest Challenge or Question" value={formData.biggestChallenge} onChange={handleChange} placeholder="What holds you back?" onAutofill={() => handleGenerateField('biggestChallenge')} isAutofilling={generatingField === 'biggestChallenge'} />
@@ -308,7 +327,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             </div>
         </div>
 
-        <FormSectionHeader>4. Your Tools & Goals</FormSectionHeader>
+        <FormSectionHeader>{isSignupMode ? '5. Your Tools & Goals' : '4. Your Tools & Goals'}</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="dailyTimeCommitment" label="Daily Hours for Growth" value={formData.dailyTimeCommitment} onChange={handleChange} placeholder="e.g., 2" type="number" />
             <InputField id="profitGoal" label="Desired Monthly Profit" value={formData.profitGoal} onChange={handleChange} placeholder="e.g., 100000" type="text" />
@@ -325,13 +344,20 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             </div>
         </div>
         
-        <div className="pt-4">
+        <div className="pt-4 space-y-4">
             <button 
                 type="submit" 
                 className="w-full bg-yellow-400 text-gray-900 font-bold py-3 px-4 rounded-lg hover:bg-yellow-300 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400"
             >
-                Make My Plan!
+                {isSignupMode ? 'Create Account & Make My Plan!' : 'Make My Plan!'}
             </button>
+            {isSignupMode && (
+              <div className="text-center">
+                 <button type="button" onClick={onBackToLogin} className="text-sm font-semibold text-yellow-400 hover:underline">
+                    Already have an account? Login
+                 </button>
+              </div>
+            )}
         </div>
       </form>
     </Card>

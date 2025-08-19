@@ -14,13 +14,14 @@ import {
 } from 'firebase/firestore';
 import { UserData } from '../types';
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY,
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBHjnqtoGrE4lQHFjOiVhUpkA6ae6vfTSY",
+  authDomain: "hormozi-ai-app.firebaseapp.com",
+  projectId: "hormozi-ai-app",
+  storageBucket: "hormozi-ai-app.appspot.com",
+  messagingSenderId: "261341656811",
+  appId: "1:261341656811:web:80ec2f2c1d789cc4af70ae"
 };
 
 // Initialize Firebase

@@ -1,9 +1,7 @@
 
 declare var JSZip: any;
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
-import { auth, handleSignOut } from './services/firebaseService';
-import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, UserData } from './types';
+import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, User, Users } from './types';
 import { 
     generateDiagnosis, generateMoneyModelAnalysis, generateMoneyModel, 
     generateMoneyModelMechanisms, generateOperationsPlan, generateOffer1, 
@@ -11,7 +9,6 @@ import {
     generateMarketingModel, generateSalesFunnel, generateKpiDashboard,
     generateAccountabilityTracker, generateAssetContent, generateChatResponseStream 
 } from './services/hormoziAiService';
-import { saveUserData, getUserData } from './services/firebaseService';
 
 import Step1Form from './components/Step1Form';
 import ProgressBar from './components/common/ProgressBar';
@@ -23,8 +20,8 @@ import OfferPreviewModal from './components/OfferPreviewModal';
 import Auth from './components/Auth';
 
 const App: React.FC = () => {
-  const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -52,59 +49,55 @@ const App: React.FC = () => {
   const pdfAssetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async user => {
-      if (user) {
-        setFirebaseUser(user);
-        // Fetch user data from Firestore
-        const userData = await getUserData(user.uid);
-        if (userData) {
-          setCurrentUserData(userData);
-        } else {
-          // New user, create a default profile
-          const newUser: UserData = {
-            uid: user.uid,
-            email: user.email!,
-            playbook: null,
-            businessData: null,
-          };
-          await saveUserData(newUser);
-          setCurrentUserData(newUser);
-        }
-      } else {
-        setFirebaseUser(null);
-        setCurrentUserData(null);
+    try {
+      const loggedInUserJson = sessionStorage.getItem('currentUser');
+      if (loggedInUserJson) {
+        const user: User = JSON.parse(loggedInUserJson);
+        setCurrentUser(user);
       }
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
+    } catch (e) {
+      console.error("Failed to parse user from session storage", e);
+      sessionStorage.removeItem('currentUser');
+    }
+    setAuthLoading(false);
   }, []);
 
-  const handleGenerate = useCallback(async (data: BusinessData) => {
-    if (!firebaseUser) {
-        setError("You must be logged in to create a plan.");
+  const handleSignupAndGenerate = useCallback(async (businessData: BusinessData, credentials: {username: string, password: string}) => {
+    const { username, password } = credentials;
+    if (!username || !password) {
+        setError("Username and password are required.");
+        return;
+    }
+    
+    const usersJson = localStorage.getItem('hormoziAiUsers') || '{}';
+    const users: Users = JSON.parse(usersJson);
+
+    if (users[username]) {
+        setError("Username already exists. Please choose another or log in.");
         return;
     }
 
+    const newUser: User = { username, password, businessData, playbook: null };
+    
     setIsLoading(true);
-    setCurrentUserData(prev => prev ? { ...prev, businessData: data, playbook: null } : null);
     setLoadingProgress(0);
 
     try {
         const fullPlaybook: Partial<GeneratedPlaybook> = {};
         const steps = [
-            { name: "Analyzing Your Business...", fn: () => generateDiagnosis(data), key: 'diagnosis' },
-            { name: "Building Your Money Plan...", fn: () => generateMoneyModelAnalysis(data), key: 'moneyModelAnalysis' },
-            { name: "Creating Your Money Toolkit...", fn: () => generateMoneyModelMechanisms(data), key: 'moneyModelMechanisms' },
-            { name: "Designing Your Money Funnel...", fn: () => generateMoneyModel(data), key: 'moneyModel' },
-            { name: "Crafting Your Best Offers...", fn: () => generateOffer1(data), key: 'offer1' },
-            { name: "Creating a Second Offer...", fn: () => generateOffer2(data), key: 'offer2' },
-            { name: "Making a 'Hello' Offer...", fn: () => generateDownsell(data), key: 'downsell' },
-            { name: "Finding Your Customer Path...", fn: () => generateMarketingModel(data), key: 'marketingModel' },
-            { name: "Building Your Sales Funnel...", fn: () => generateSalesFunnel(data), key: 'salesFunnel' },
-            { name: "Designing Your Profit Steps...", fn: () => generateProfitPath(data), key: 'profitPath' },
-            { name: "Planning Your Daily Actions...", fn: () => generateOperationsPlan(data), key: 'operationsPlan' },
-            { name: "Setting Up Your Scorecard...", fn: () => generateKpiDashboard(data), key: 'kpiDashboard' },
-            { name: "Creating Your Growth Tracker...", fn: () => generateAccountabilityTracker(data), key: 'accountabilityTracker' },
+            { name: "Analyzing Your Business...", fn: () => generateDiagnosis(businessData), key: 'diagnosis' },
+            { name: "Building Your Money Plan...", fn: () => generateMoneyModelAnalysis(businessData), key: 'moneyModelAnalysis' },
+            { name: "Creating Your Money Toolkit...", fn: () => generateMoneyModelMechanisms(businessData), key: 'moneyModelMechanisms' },
+            { name: "Designing Your Money Funnel...", fn: () => generateMoneyModel(businessData), key: 'moneyModel' },
+            { name: "Crafting Your Best Offers...", fn: () => generateOffer1(businessData), key: 'offer1' },
+            { name: "Creating a Second Offer...", fn: () => generateOffer2(businessData), key: 'offer2' },
+            { name: "Making a 'Hello' Offer...", fn: () => generateDownsell(businessData), key: 'downsell' },
+            { name: "Finding Your Customer Path...", fn: () => generateMarketingModel(businessData), key: 'marketingModel' },
+            { name: "Building Your Sales Funnel...", fn: () => generateSalesFunnel(businessData), key: 'salesFunnel' },
+            { name: "Designing Your Profit Steps...", fn: () => generateProfitPath(businessData), key: 'profitPath' },
+            { name: "Planning Your Daily Actions...", fn: () => generateOperationsPlan(businessData), key: 'operationsPlan' },
+            { name: "Setting Up Your Scorecard...", fn: () => generateKpiDashboard(businessData), key: 'kpiDashboard' },
+            { name: "Creating Your Growth Tracker...", fn: () => generateAccountabilityTracker(businessData), key: 'accountabilityTracker' },
         ];
         
         for (let i = 0; i < steps.length; i++) {
@@ -117,15 +110,14 @@ const App: React.FC = () => {
         const finalPlaybook = fullPlaybook as GeneratedPlaybook;
         setLoadingText('Plan Complete!');
         
-        const updatedUserData: UserData = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email!,
-            businessData: data,
-            playbook: finalPlaybook,
-        };
+        newUser.playbook = finalPlaybook;
+        users[username] = { ...newUser };
+        localStorage.setItem('hormoziAiUsers', JSON.stringify(users));
         
-        await saveUserData(updatedUserData);
-        setCurrentUserData(updatedUserData);
+        const sessionUser = { ...newUser };
+        delete sessionUser.password;
+        sessionStorage.setItem('currentUser', JSON.stringify(sessionUser));
+        setCurrentUser(sessionUser);
 
     } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
@@ -133,30 +125,54 @@ const App: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [firebaseUser]);
-  
-  const handleLogout = () => {
-      handleSignOut();
+  }, []);
+
+  const handleLogin = (username: string, password: string): boolean => {
+    const usersJson = localStorage.getItem('hormoziAiUsers') || '{}';
+    const users: Users = JSON.parse(usersJson);
+    const user = users[username];
+
+    if (user && user.password === password) {
+      const sessionUser = { ...user };
+      delete sessionUser.password;
+      sessionStorage.setItem('currentUser', JSON.stringify(sessionUser));
+      setCurrentUser(sessionUser);
+      setError(null);
+      return true;
+    } else {
+      setError("Invalid username or password.");
+      return false;
+    }
   };
 
-  const handleStartNew = async () => {
-    if (!currentUserData) return;
+  const handleLogout = () => {
+    sessionStorage.removeItem('currentUser');
+    setCurrentUser(null);
+    setAuthView('login');
+  };
+
+  const handleStartNew = () => {
+    if (!currentUser) return;
     const confirmed = window.confirm("Are you sure you want to start a new plan? Your current plan will be replaced.");
     if (confirmed) {
-        const updatedUserData: UserData = {
-            ...currentUserData,
-            playbook: null,
-            businessData: null
-        };
-        await saveUserData(updatedUserData);
-        setCurrentUserData(updatedUserData);
-        // Reset local state
+        const updatedUser = { ...currentUser, playbook: null, businessData: null };
+        
+        const usersJson = localStorage.getItem('hormoziAiUsers') || '{}';
+        const users: Users = JSON.parse(usersJson);
+        const storedUser = users[currentUser.username];
+        if(storedUser) {
+            users[currentUser.username] = { ...storedUser, playbook: null, businessData: null };
+            localStorage.setItem('hormoziAiUsers', JSON.stringify(users));
+        }
+        
+        sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        setCurrentUser(updatedUser);
         setError(null);
         setIsLoading(false);
         setChatHistory([]);
     }
-  }
-
+  };
+  
   const prepareAndDownloadPdf = useCallback((type: string) => {
     if (isGeneratingPdf || isZipping) return;
     setAssetBundleForPdf(null);
@@ -167,8 +183,8 @@ const App: React.FC = () => {
   }, [isGeneratingPdf, isZipping]);
   
   const prepareAndDownloadAssetPdf = useCallback(async (item: OfferStackItem) => {
-    if (!item.asset || !currentUserData?.businessData || isGeneratingPdf || isZipping) {
-        if (!item.asset || !currentUserData?.businessData) setError("Cannot generate asset: Missing asset details or business context.");
+    if (!item.asset || !currentUser?.businessData || isGeneratingPdf || isZipping) {
+        if (!item.asset || !currentUser?.businessData) setError("Cannot generate asset: Missing asset details or business context.");
         return;
     }
     
@@ -183,7 +199,7 @@ const App: React.FC = () => {
         
         setPdfProgress(25);
         if (!contentToUse || contentToUse.trim() === '' || contentToUse.length < 50) {
-            contentToUse = await generateAssetContent(item, currentUserData.businessData);
+            contentToUse = await generateAssetContent(item, currentUser.businessData);
         }
         setPdfProgress(75);
 
@@ -198,11 +214,11 @@ const App: React.FC = () => {
         setIsGeneratingPdf(false);
         setGeneratingAsset(null);
     }
-  }, [currentUserData?.businessData, isGeneratingPdf, isZipping]);
+  }, [currentUser?.businessData, isGeneratingPdf, isZipping]);
   
   const prepareAndDownloadAssetBundlePdf = useCallback(async (offer: GeneratedOffer) => {
-    if (!currentUserData?.businessData || isGeneratingPdf || isZipping) {
-        if(!currentUserData?.businessData) setError("Cannot generate assets: Missing business context.");
+    if (!currentUser?.businessData || isGeneratingPdf || isZipping) {
+        if(!currentUser?.businessData) setError("Cannot generate assets: Missing business context.");
         return;
     }
 
@@ -221,7 +237,7 @@ const App: React.FC = () => {
                 if (!item.asset) return item;
                 let newContent = item.asset.content;
                 if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, currentUserData.businessData!);
+                    newContent = await generateAssetContent(item, currentUser.businessData!);
                 }
                 assetsProcessed++;
                 setPdfProgress((assetsProcessed / totalAssets) * 90); // Process up to 90%
@@ -237,10 +253,10 @@ const App: React.FC = () => {
         setIsGeneratingPdf(false);
         setGeneratingAssetBundleFor(null);
     }
-  }, [currentUserData?.businessData, isGeneratingPdf, isZipping]);
+  }, [currentUser?.businessData, isGeneratingPdf, isZipping]);
 
   const processAllAssets = async (playbookToProcess: GeneratedPlaybook) => {
-    if (!currentUserData?.businessData) return playbookToProcess;
+    if (!currentUser?.businessData) return playbookToProcess;
 
     const allOffers = [playbookToProcess.offer1, playbookToProcess.offer2, playbookToProcess.downsell.offer];
     const totalAssets = allOffers.reduce((sum, offer) => sum + offer.stack.filter(item => item.asset).length, 0);
@@ -252,7 +268,7 @@ const App: React.FC = () => {
                 if (!item.asset) return item;
                 let newContent = item.asset.content;
                 if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, currentUserData.businessData!);
+                    newContent = await generateAssetContent(item, currentUser.businessData!);
                 }
                 assetsProcessed++;
                 setZipProgress((assetsProcessed / totalAssets) * 50); // Asset processing is first 50%
@@ -277,12 +293,12 @@ const App: React.FC = () => {
   };
 
   const handleDownloadAll = async () => {
-    if (!currentUserData?.playbook || isZipping || isGeneratingPdf) return;
+    if (!currentUser?.playbook || isZipping || isGeneratingPdf) return;
     setIsZipping(true);
     setZipProgress(0);
     setError(null);
     try {
-      const processed = await processAllAssets(currentUserData.playbook);
+      const processed = await processAllAssets(currentUser.playbook);
       setProcessedPlaybookForZip(processed);
       setShowAllPdfsForZip(true);
     } catch(err) {
@@ -292,14 +308,14 @@ const App: React.FC = () => {
   };
 
   const handlePreviewAsset = useCallback(async (item: OfferStackItem) => {
-    if (!item.asset || !currentUserData?.businessData) {
+    if (!item.asset || !currentUser?.businessData) {
         setError("Cannot preview asset: Missing asset details or business context.");
         return;
     }
     
     if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
         try {
-            const newContent = await generateAssetContent(item, currentUserData.businessData);
+            const newContent = await generateAssetContent(item, currentUser.businessData);
             setAssetToPreview({ ...item, asset: { ...item.asset, content: newContent } });
         } catch (err) {
             setError(err instanceof Error ? `Asset Generation Failed: ${err.message}` : 'An unknown error occurred during asset generation.');
@@ -307,7 +323,7 @@ const App: React.FC = () => {
     } else {
         setAssetToPreview(item);
     }
-  }, [currentUserData?.businessData]);
+  }, [currentUser?.businessData]);
 
   const generateOfflineIndexHtml = (playbook: GeneratedPlaybook, businessData: BusinessData): string => {
     const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '').replace(/ /g, '_');
@@ -415,12 +431,12 @@ const App: React.FC = () => {
   };
 
   const handleDownloadHtmlPage = () => {
-    if (!currentUserData?.playbook || !currentUserData?.businessData) {
+    if (!currentUser?.playbook || !currentUser?.businessData) {
         setError("Cannot generate HTML page: Missing playbook or business data.");
         return;
     }
     try {
-        const htmlContent = generateOfflineIndexHtml(currentUserData.playbook, currentUserData.businessData);
+        const htmlContent = generateOfflineIndexHtml(currentUser.playbook, currentUser.businessData);
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -434,7 +450,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (showAllPdfsForZip && isZipping && processedPlaybookForZip && currentUserData?.businessData) {
+    if (showAllPdfsForZip && isZipping && processedPlaybookForZip && currentUser?.businessData) {
       const performZipping = async () => {
           await new Promise(resolve => setTimeout(resolve, 200));
           
@@ -463,7 +479,7 @@ const App: React.FC = () => {
               setZipProgress(zippingProgress);
           }
           
-          const offlineIndexHtml = generateOfflineIndexHtml(processedPlaybookForZip, currentUserData.businessData);
+          const offlineIndexHtml = generateOfflineIndexHtml(processedPlaybookForZip, currentUser.businessData);
           zip.file('index.html', offlineIndexHtml);
           setZipProgress(99);
 
@@ -484,26 +500,26 @@ const App: React.FC = () => {
       };
       performZipping();
     }
-  }, [showAllPdfsForZip, isZipping, processedPlaybookForZip, currentUserData?.businessData]);
+  }, [showAllPdfsForZip, isZipping, processedPlaybookForZip, currentUser?.businessData]);
 
   useEffect(() => {
-    if (currentUserData?.playbook && chatHistory.length === 0) {
+    if (currentUser?.playbook && chatHistory.length === 0) {
         setChatHistory([{
             role: 'model',
             content: "I've created your plan. Now, let's make it perfect. Ask me to change a section, give you new ideas, or explain a concept. How can I help?"
         }]);
     }
-  }, [currentUserData?.playbook, chatHistory.length]);
+  }, [currentUser?.playbook, chatHistory.length]);
 
   const handleSendMessage = async (message: string) => {
-      if (!message.trim() || isChatLoading || !currentUserData?.businessData || !currentUserData?.playbook) return;
+      if (!message.trim() || isChatLoading || !currentUser?.businessData || !currentUser?.playbook) return;
 
       const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
       setChatHistory(newHistory);
       setIsChatLoading(true);
 
       try {
-          const stream = await generateChatResponseStream(currentUserData.businessData, currentUserData.playbook, newHistory);
+          const stream = await generateChatResponseStream(currentUser.businessData, currentUser.playbook, newHistory);
           
           let aiResponse = '';
           setChatHistory(prev => [...prev, { role: 'model', content: '' }]);
@@ -526,7 +542,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!isGeneratingPdf || !currentUserData?.playbook) return;
+    if (!isGeneratingPdf || !currentUser?.playbook) return;
     if (!pdfType && !assetForPdf && !assetBundleForPdf) return;
 
     const generatePdf = async () => {
@@ -578,9 +594,9 @@ const App: React.FC = () => {
     };
     
     generatePdf();
-  }, [pdfType, assetForPdf, assetBundleForPdf, isGeneratingPdf, currentUserData?.playbook]);
+  }, [pdfType, assetForPdf, assetBundleForPdf, isGeneratingPdf, currentUser?.playbook]);
 
-  const downloadOptions = currentUserData?.playbook ? [
+  const downloadOptions = currentUser?.playbook ? [
     { label: 'The Full Plan (PDF)', onClick: () => prepareAndDownloadPdf('full') },
     { label: 'Explain The Concepts (PDF)', onClick: () => prepareAndDownloadPdf('concepts-guide') },
     { label: 'Your Business Scorecard (KPIs)', onClick: () => prepareAndDownloadPdf('kpi-dashboard') },
@@ -597,22 +613,25 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (authLoading) {
-      return <div className="text-center p-8">Loading Account...</div>;
+      return <div className="text-center p-8">Loading...</div>;
     }
     
-    if (!firebaseUser) {
-      return <Auth setError={setError} />;
+    if (!currentUser) {
+      if (authView === 'login') {
+        return <Auth onLogin={handleLogin} onSwitchToSignup={() => setAuthView('signup')} setError={setError} />;
+      }
+      return <Step1Form onSubmit={handleSignupAndGenerate} onBackToLogin={() => setAuthView('login')} />;
     }
 
     if (isLoading) {
       return <ProgressBar progress={loadingProgress} loadingText={loadingText} />;
     }
 
-    if (currentUserData?.playbook && currentUserData?.businessData) {
+    if (currentUser.playbook && currentUser.businessData) {
       return (
         <div className="space-y-12">
           <FullPlaybook 
-            playbook={currentUserData.playbook} 
+            playbook={currentUser.playbook} 
             onDownloadAsset={prepareAndDownloadAssetPdf}
             isAnyPdfGenerating={anyFileGenerationInProgress}
             generatingAsset={generatingAsset}
@@ -657,7 +676,8 @@ const App: React.FC = () => {
       );
     }
     
-    return <Step1Form onSubmit={handleGenerate} />;
+    // This case happens if a user is logged in but hasn't created a plan yet.
+    return <Step1Form onSubmit={handleSignupAndGenerate} onBackToLogin={() => setAuthView('login')} isSignupMode={false} />;
   };
 
   return (
@@ -674,7 +694,7 @@ const App: React.FC = () => {
             The <span className="text-yellow-400">Hormozi</span> AI
           </h1>
           <p className="text-gray-400 mt-2">Your Simple Path to Business Growth.</p>
-           {firebaseUser && <p className="text-sm text-gray-500 mt-1">Logged in as: {firebaseUser.email}</p>}
+           {currentUser && <p className="text-sm text-gray-500 mt-1">Logged in as: {currentUser.username}</p>}
         </header>
         
         <main className="w-full max-w-5xl flex-grow">
@@ -694,18 +714,18 @@ const App: React.FC = () => {
         </main>
         
         <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
-            {currentUserData?.playbook && currentUserData?.businessData && (
+            {currentUser?.playbook && currentUser?.businessData && (
               <>
                 <div ref={pdfSingleRenderRef} className="w-[800px]">
-                    <AllPdfs playbook={currentUserData.playbook} businessData={currentUserData.businessData} type={pdfType} assetBundle={assetBundleForPdf} />
+                    <AllPdfs playbook={currentUser.playbook} businessData={currentUser.businessData} type={pdfType} assetBundle={assetBundleForPdf} />
                 </div>
                 {assetForPdf && (
                   <div ref={pdfAssetRef} className="w-[800px]">
-                     <AllPdfs playbook={currentUserData.playbook} businessData={currentUserData.businessData} type="single-asset" singleAsset={assetForPdf} />
+                     <AllPdfs playbook={currentUser.playbook} businessData={currentUser.businessData} type="single-asset" singleAsset={assetForPdf} />
                   </div>
                 )}
                 {showAllPdfsForZip && processedPlaybookForZip && (
-                  <AllPdfs playbook={processedPlaybookForZip} businessData={currentUserData.businessData} type="all" />
+                  <AllPdfs playbook={processedPlaybookForZip} businessData={currentUser.businessData} type="all" />
                 )}
               </>
             )}

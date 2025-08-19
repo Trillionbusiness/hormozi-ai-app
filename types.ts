@@ -239,14 +239,25 @@ export interface GeneratedPlaybook {
   accountabilityTracker: GeneratedAccountabilityTracker;
 }
 
-// User data structure for Firestore
+// --- Local Storage User Management ---
+export interface User {
+  username: string;
+  password?: string; // Hashed password for storage
+  businessData: BusinessData | null;
+  playbook: GeneratedPlaybook | null;
+}
+
+export interface Users {
+  [username: string]: User;
+}
+
+// --- Firebase User Management ---
 export interface UserData {
   uid: string;
   email: string;
-  playbook: GeneratedPlaybook | null;
   businessData: BusinessData | null;
+  playbook: GeneratedPlaybook | null;
 }
-
 
 export interface ChatMessage {
   role: 'user' | 'model';
