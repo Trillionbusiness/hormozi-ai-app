@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BusinessData, GeneratedPlaybook } from '../../types';
 
@@ -62,7 +61,7 @@ const ConceptsGuidePdf: React.FC<ConceptsGuidePdfProps> = ({ businessData, playb
                  <HighlightBox title="The Golden Rule of Growth">
                     <P>For every new customer, the money you make from them in the first 30 days should be at least double what it cost you to get them.</P>
                     <div className="text-center my-4 p-4 bg-white rounded-md">
-                        <p className="text-lg font-bold">30-Day Profit > 2x (Cost to Get Customer + Cost to Deliver Service)</p>
+                        <p className="text-lg font-bold">30-Day Profit {'>'} 2x (Cost to Get Customer + Cost to Deliver Service)</p>
                     </div>
                     <P>When you follow this rule, you have a money machine. Each new customer gives you the cash to go out and find two more customers, creating explosive growth.</P>
                 </HighlightBox>

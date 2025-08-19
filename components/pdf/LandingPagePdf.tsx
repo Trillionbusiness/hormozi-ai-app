@@ -64,7 +64,7 @@ const LandingPagePdf: React.FC<LandingPagePdfProps> = ({ playbook, businessData 
                 <SectionTitle className="text-center">Your Success is Guaranteed</SectionTitle>
                 <div className="p-8 border-4 border-dashed border-yellow-400 bg-yellow-50 rounded-lg text-center break-inside-avoid">
                     <h3 className="text-2xl font-bold text-gray-800">Our Promise To You</h3>
-                    <P className="italic text-xl mt-2">"{offer.guarantee}"</p>
+                    <P className="italic text-xl mt-2">"{offer.guarantee}"</P>
                     <P className="mt-4">You have nothing to lose and everything to gain. The only risk is doing nothing.</P>
                 </div>
                 

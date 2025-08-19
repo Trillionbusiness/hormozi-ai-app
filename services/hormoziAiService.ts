@@ -704,7 +704,7 @@ const accountabilityTrackerSchema = {
 
 // --- HELPER FUNCTIONS ---
 
-const generate = async <T>(prompt: string, schema: any): Promise<T> => {
+const generate = async <T,>(prompt: string, schema: any): Promise<T> => {
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
