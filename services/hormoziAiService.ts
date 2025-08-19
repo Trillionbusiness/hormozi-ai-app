@@ -7,11 +7,31 @@ import {
     GeneratedAccountabilityTracker
 } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set.");
+let ai: GoogleGenAI | null = null;
+let initializationError: string | null = null;
+
+try {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === '') {
+    throw new Error("API_KEY was not provided during the build process. Please check your Netlify environment variables and build command.");
+  }
+  ai = new GoogleGenAI({ apiKey });
+} catch (e) {
+  initializationError = e instanceof Error ? e.message : "An unknown error occurred during AI initialization.";
+  console.error("Hormozi AI Service Initialization Failed:", initializationError);
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAiInstance = (): GoogleGenAI => {
+    if (initializationError) {
+        throw new Error(`AI Service failed to initialize: ${initializationError}`);
+    }
+    if (!ai) {
+        // This case should theoretically be caught by the initializationError check, but it's here for safety.
+        throw new Error("AI client is not available. Initialization may have failed silently.");
+    }
+    return ai;
+};
+
 
 const escapeStringForJson = (str: string | undefined | null): string => {
     if (!str) return '';
@@ -705,6 +725,7 @@ const accountabilityTrackerSchema = {
 // --- HELPER FUNCTIONS ---
 
 const generate = async <T,>(prompt: string, schema: any): Promise<T> => {
+    const ai = getAiInstance();
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -848,6 +869,7 @@ For each phase, provide a title, a clear goal, 3-5 concrete actions with metrics
 };
 
 export const generateAssetContent = async (item: OfferStackItem, businessData: BusinessData): Promise<string> => {
+    const ai = getAiInstance();
     const prompt = `You are Hormozi AI, an expert business consultant and content creator. A business is creating a downloadable asset for their offer. Your task is to write the full, complete text content for this asset. Do not provide a summary; provide the actual, ready-to-use content. Format the output in simple Markdown.
 
 Business Context:
@@ -872,6 +894,7 @@ TASK: Write the full, ready-to-use content for the asset described above.
 };
 
 const generateSimpleText = async (prompt: string): Promise<string> => {
+    const ai = getAiInstance();
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -931,6 +954,7 @@ export const generateChatResponseStream = async (
     playbook: GeneratedPlaybook,
     history: ChatMessage[]
 ) => {
+    const ai = getAiInstance();
     // Convert history to a simple string format for the prompt
     const formattedHistory = history.map(msg => `${msg.role === 'user' ? 'AI' : 'AI'}: ${msg.content}`).join('\n\n');
 
