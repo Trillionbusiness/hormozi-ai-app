@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hormozi AI Business Plan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Using a more Hormozi-esque font */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+      body {
+        /* Resetting body margin is good practice for embeds */
+        margin: 0;
+      }
+      #root {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.13.0",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react/": "https://esm.sh/react@18.2.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root" class="bg-gray-900 text-gray-200"></div>
+    <script type="module" src="/bundle.js"></script>
+  </body>
+</html>
