@@ -1,7 +1,9 @@
 
+declare var JSZip: any;
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import JSZip from 'jszip';
-import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage } from './types';
+import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { auth, handleSignOut } from './services/firebaseService';
+import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, UserData } from './types';
 import { 
     generateDiagnosis, generateMoneyModelAnalysis, generateMoneyModel, 
     generateMoneyModelMechanisms, generateOperationsPlan, generateOffer1, 
@@ -9,6 +11,8 @@ import {
     generateMarketingModel, generateSalesFunnel, generateKpiDashboard,
     generateAccountabilityTracker, generateAssetContent, generateChatResponseStream 
 } from './services/hormoziAiService';
+import { saveUserData, getUserData } from './services/firebaseService';
+
 import Step1Form from './components/Step1Form';
 import ProgressBar from './components/common/ProgressBar';
 import CircularProgress from './components/common/CircularProgress';
@@ -16,9 +20,13 @@ import FullPlaybook from './components/FullPlaybook';
 import DropdownButton from './components/common/DropdownButton';
 import AllPdfs from './components/pdf/AllPdfs';
 import OfferPreviewModal from './components/OfferPreviewModal';
+import Auth from './components/Auth';
 
 const App: React.FC = () => {
-  const [step, setStep] = useState<number>(1);
+  const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('Starting...');
@@ -31,8 +39,6 @@ const App: React.FC = () => {
   const [pdfType, setPdfType] = useState<string | null>(null);
   const [assetForPdf, setAssetForPdf] = useState<NonNullable<OfferStackItem['asset']> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [playbook, setPlaybook] = useState<GeneratedPlaybook | null>(null);
-  const [businessData, setBusinessData] = useState<BusinessData | null>(null);
   const [generatingAsset, setGeneratingAsset] = useState<OfferStackItem | null>(null);
   const [assetBundleForPdf, setAssetBundleForPdf] = useState<GeneratedOffer | null>(null);
   const [generatingAssetBundleFor, setGeneratingAssetBundleFor] = useState<string | null>(null);
@@ -45,11 +51,42 @@ const App: React.FC = () => {
   const pdfSingleRenderRef = useRef<HTMLDivElement>(null);
   const pdfAssetRef = useRef<HTMLDivElement>(null);
 
-  const handleFormSubmit = useCallback(async (data: BusinessData) => {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async user => {
+      if (user) {
+        setFirebaseUser(user);
+        // Fetch user data from Firestore
+        const userData = await getUserData(user.uid);
+        if (userData) {
+          setCurrentUserData(userData);
+        } else {
+          // New user, create a default profile
+          const newUser: UserData = {
+            uid: user.uid,
+            email: user.email!,
+            playbook: null,
+            businessData: null,
+          };
+          await saveUserData(newUser);
+          setCurrentUserData(newUser);
+        }
+      } else {
+        setFirebaseUser(null);
+        setCurrentUserData(null);
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleGenerate = useCallback(async (data: BusinessData) => {
+    if (!firebaseUser) {
+        setError("You must be logged in to create a plan.");
+        return;
+    }
+
     setIsLoading(true);
-    setError(null);
-    setPlaybook(null);
-    setBusinessData(data);
+    setCurrentUserData(prev => prev ? { ...prev, businessData: data, playbook: null } : null);
     setLoadingProgress(0);
 
     try {
@@ -76,37 +113,49 @@ const App: React.FC = () => {
             fullPlaybook[steps[i].key] = await steps[i].fn();
             setLoadingProgress(((i + 1) / steps.length) * 100);
         }
-
-        setPlaybook(fullPlaybook as GeneratedPlaybook);
+        
+        const finalPlaybook = fullPlaybook as GeneratedPlaybook;
         setLoadingText('Plan Complete!');
-        setStep(2);
+        
+        const updatedUserData: UserData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email!,
+            businessData: data,
+            playbook: finalPlaybook,
+        };
+        
+        await saveUserData(updatedUserData);
+        setCurrentUserData(updatedUserData);
 
     } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred. Reload and try again.');
+        setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
         console.error(err);
     } finally {
         setIsLoading(false);
     }
-  }, []);
+  }, [firebaseUser]);
   
-  const resetApp = () => {
-      setStep(1);
-      setPlaybook(null);
-      setError(null);
-      setIsLoading(false);
-      setIsZipping(false);
-      setPdfType(null);
-      setAssetForPdf(null);
-      setBusinessData(null);
-      setGeneratingAsset(null);
-      setAssetBundleForPdf(null);
-      setGeneratingAssetBundleFor(null);
-      setChatHistory([]);
-      setIsChatLoading(false);
-      setShowAllPdfsForZip(false);
-      setProcessedPlaybookForZip(null);
-      setAssetToPreview(null);
+  const handleLogout = () => {
+      handleSignOut();
   };
+
+  const handleStartNew = async () => {
+    if (!currentUserData) return;
+    const confirmed = window.confirm("Are you sure you want to start a new plan? Your current plan will be replaced.");
+    if (confirmed) {
+        const updatedUserData: UserData = {
+            ...currentUserData,
+            playbook: null,
+            businessData: null
+        };
+        await saveUserData(updatedUserData);
+        setCurrentUserData(updatedUserData);
+        // Reset local state
+        setError(null);
+        setIsLoading(false);
+        setChatHistory([]);
+    }
+  }
 
   const prepareAndDownloadPdf = useCallback((type: string) => {
     if (isGeneratingPdf || isZipping) return;
@@ -118,8 +167,8 @@ const App: React.FC = () => {
   }, [isGeneratingPdf, isZipping]);
   
   const prepareAndDownloadAssetPdf = useCallback(async (item: OfferStackItem) => {
-    if (!item.asset || !businessData || isGeneratingPdf || isZipping) {
-        if (!item.asset || !businessData) setError("Cannot generate asset: Missing asset details or business context.");
+    if (!item.asset || !currentUserData?.businessData || isGeneratingPdf || isZipping) {
+        if (!item.asset || !currentUserData?.businessData) setError("Cannot generate asset: Missing asset details or business context.");
         return;
     }
     
@@ -134,7 +183,7 @@ const App: React.FC = () => {
         
         setPdfProgress(25);
         if (!contentToUse || contentToUse.trim() === '' || contentToUse.length < 50) {
-            contentToUse = await generateAssetContent(item, businessData);
+            contentToUse = await generateAssetContent(item, currentUserData.businessData);
         }
         setPdfProgress(75);
 
@@ -149,11 +198,11 @@ const App: React.FC = () => {
         setIsGeneratingPdf(false);
         setGeneratingAsset(null);
     }
-  }, [businessData, isGeneratingPdf, isZipping]);
+  }, [currentUserData?.businessData, isGeneratingPdf, isZipping]);
   
   const prepareAndDownloadAssetBundlePdf = useCallback(async (offer: GeneratedOffer) => {
-    if (!businessData || isGeneratingPdf || isZipping) {
-        if(!businessData) setError("Cannot generate assets: Missing business context.");
+    if (!currentUserData?.businessData || isGeneratingPdf || isZipping) {
+        if(!currentUserData?.businessData) setError("Cannot generate assets: Missing business context.");
         return;
     }
 
@@ -172,7 +221,7 @@ const App: React.FC = () => {
                 if (!item.asset) return item;
                 let newContent = item.asset.content;
                 if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, businessData);
+                    newContent = await generateAssetContent(item, currentUserData.businessData!);
                 }
                 assetsProcessed++;
                 setPdfProgress((assetsProcessed / totalAssets) * 90); // Process up to 90%
@@ -188,10 +237,10 @@ const App: React.FC = () => {
         setIsGeneratingPdf(false);
         setGeneratingAssetBundleFor(null);
     }
-  }, [businessData, isGeneratingPdf, isZipping]);
+  }, [currentUserData?.businessData, isGeneratingPdf, isZipping]);
 
   const processAllAssets = async (playbookToProcess: GeneratedPlaybook) => {
-    if (!businessData) return playbookToProcess;
+    if (!currentUserData?.businessData) return playbookToProcess;
 
     const allOffers = [playbookToProcess.offer1, playbookToProcess.offer2, playbookToProcess.downsell.offer];
     const totalAssets = allOffers.reduce((sum, offer) => sum + offer.stack.filter(item => item.asset).length, 0);
@@ -203,7 +252,7 @@ const App: React.FC = () => {
                 if (!item.asset) return item;
                 let newContent = item.asset.content;
                 if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                    newContent = await generateAssetContent(item, businessData);
+                    newContent = await generateAssetContent(item, currentUserData.businessData!);
                 }
                 assetsProcessed++;
                 setZipProgress((assetsProcessed / totalAssets) * 50); // Asset processing is first 50%
@@ -228,12 +277,12 @@ const App: React.FC = () => {
   };
 
   const handleDownloadAll = async () => {
-    if (!playbook || isZipping || isGeneratingPdf) return;
+    if (!currentUserData?.playbook || isZipping || isGeneratingPdf) return;
     setIsZipping(true);
     setZipProgress(0);
     setError(null);
     try {
-      const processed = await processAllAssets(playbook);
+      const processed = await processAllAssets(currentUserData.playbook);
       setProcessedPlaybookForZip(processed);
       setShowAllPdfsForZip(true);
     } catch(err) {
@@ -243,16 +292,14 @@ const App: React.FC = () => {
   };
 
   const handlePreviewAsset = useCallback(async (item: OfferStackItem) => {
-    if (!item.asset || !businessData) {
+    if (!item.asset || !currentUserData?.businessData) {
         setError("Cannot preview asset: Missing asset details or business context.");
         return;
     }
     
-    // If content is missing, generate it first
     if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
         try {
-            // To provide a better UX, we can show a mini-loader on the preview button itself
-            const newContent = await generateAssetContent(item, businessData);
+            const newContent = await generateAssetContent(item, currentUserData.businessData);
             setAssetToPreview({ ...item, asset: { ...item.asset, content: newContent } });
         } catch (err) {
             setError(err instanceof Error ? `Asset Generation Failed: ${err.message}` : 'An unknown error occurred during asset generation.');
@@ -260,7 +307,7 @@ const App: React.FC = () => {
     } else {
         setAssetToPreview(item);
     }
-  }, [businessData]);
+  }, [currentUserData?.businessData]);
 
   const generateOfflineIndexHtml = (playbook: GeneratedPlaybook, businessData: BusinessData): string => {
     const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '').replace(/ /g, '_');
@@ -289,10 +336,6 @@ const App: React.FC = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hormozi AI Business Plan</title>
-    <!-- 
-        IMPORTANT: This file is designed to work offline with the files from the 'Hormozi_AI_Business_Plan.zip'.
-        Make sure this HTML file is in the same main folder as the '01_Core_Plan', '02_Money_Models', etc. folders.
-    -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #111827; color: #E5E7EB; margin: 0; padding: 2rem; }
@@ -372,12 +415,12 @@ const App: React.FC = () => {
   };
 
   const handleDownloadHtmlPage = () => {
-    if (!playbook || !businessData) {
+    if (!currentUserData?.playbook || !currentUserData?.businessData) {
         setError("Cannot generate HTML page: Missing playbook or business data.");
         return;
     }
     try {
-        const htmlContent = generateOfflineIndexHtml(playbook, businessData);
+        const htmlContent = generateOfflineIndexHtml(currentUserData.playbook, currentUserData.businessData);
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -390,9 +433,8 @@ const App: React.FC = () => {
     }
   };
 
-
   useEffect(() => {
-    if (showAllPdfsForZip && isZipping && processedPlaybookForZip && businessData) {
+    if (showAllPdfsForZip && isZipping && processedPlaybookForZip && currentUserData?.businessData) {
       const performZipping = async () => {
           await new Promise(resolve => setTimeout(resolve, 200));
           
@@ -421,7 +463,7 @@ const App: React.FC = () => {
               setZipProgress(zippingProgress);
           }
           
-          const offlineIndexHtml = generateOfflineIndexHtml(processedPlaybookForZip, businessData);
+          const offlineIndexHtml = generateOfflineIndexHtml(processedPlaybookForZip, currentUserData.businessData);
           zip.file('index.html', offlineIndexHtml);
           setZipProgress(99);
 
@@ -442,26 +484,26 @@ const App: React.FC = () => {
       };
       performZipping();
     }
-  }, [showAllPdfsForZip, isZipping, processedPlaybookForZip, businessData]);
+  }, [showAllPdfsForZip, isZipping, processedPlaybookForZip, currentUserData?.businessData]);
 
   useEffect(() => {
-    if (playbook && chatHistory.length === 0) {
+    if (currentUserData?.playbook && chatHistory.length === 0) {
         setChatHistory([{
             role: 'model',
-            content: "I've created your first plan. Now, let's make it perfect. Ask me to change a section, give you new ideas, or explain a concept. How can I help?"
+            content: "I've created your plan. Now, let's make it perfect. Ask me to change a section, give you new ideas, or explain a concept. How can I help?"
         }]);
     }
-  }, [playbook, chatHistory.length]);
+  }, [currentUserData?.playbook, chatHistory.length]);
 
   const handleSendMessage = async (message: string) => {
-      if (!message.trim() || isChatLoading || !businessData || !playbook) return;
+      if (!message.trim() || isChatLoading || !currentUserData?.businessData || !currentUserData?.playbook) return;
 
       const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
       setChatHistory(newHistory);
       setIsChatLoading(true);
 
       try {
-          const stream = await generateChatResponseStream(businessData, playbook, newHistory);
+          const stream = await generateChatResponseStream(currentUserData.businessData, currentUserData.playbook, newHistory);
           
           let aiResponse = '';
           setChatHistory(prev => [...prev, { role: 'model', content: '' }]);
@@ -484,13 +526,13 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!isGeneratingPdf || !playbook) return;
+    if (!isGeneratingPdf || !currentUserData?.playbook) return;
     if (!pdfType && !assetForPdf && !assetBundleForPdf) return;
 
     const generatePdf = async () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      setPdfProgress(95); // Content is ready, now generating PDF
+      setPdfProgress(95);
 
       let sourceElement: HTMLDivElement | null = null;
       let fileName: string = '';
@@ -536,9 +578,9 @@ const App: React.FC = () => {
     };
     
     generatePdf();
-  }, [pdfType, assetForPdf, assetBundleForPdf, isGeneratingPdf, playbook]);
+  }, [pdfType, assetForPdf, assetBundleForPdf, isGeneratingPdf, currentUserData?.playbook]);
 
-  const downloadOptions = playbook ? [
+  const downloadOptions = currentUserData?.playbook ? [
     { label: 'The Full Plan (PDF)', onClick: () => prepareAndDownloadPdf('full') },
     { label: 'Explain The Concepts (PDF)', onClick: () => prepareAndDownloadPdf('concepts-guide') },
     { label: 'Your Business Scorecard (KPIs)', onClick: () => prepareAndDownloadPdf('kpi-dashboard') },
@@ -553,6 +595,71 @@ const App: React.FC = () => {
 
   const anyFileGenerationInProgress = isGeneratingPdf || isZipping;
 
+  const renderContent = () => {
+    if (authLoading) {
+      return <div className="text-center p-8">Loading Account...</div>;
+    }
+    
+    if (!firebaseUser) {
+      return <Auth setError={setError} />;
+    }
+
+    if (isLoading) {
+      return <ProgressBar progress={loadingProgress} loadingText={loadingText} />;
+    }
+
+    if (currentUserData?.playbook && currentUserData?.businessData) {
+      return (
+        <div className="space-y-12">
+          <FullPlaybook 
+            playbook={currentUserData.playbook} 
+            onDownloadAsset={prepareAndDownloadAssetPdf}
+            isAnyPdfGenerating={anyFileGenerationInProgress}
+            generatingAsset={generatingAsset}
+            onDownloadAllAssets={prepareAndDownloadAssetBundlePdf}
+            generatingAssetBundleFor={generatingAssetBundleFor}
+            chatHistory={chatHistory}
+            isChatLoading={isChatLoading}
+            onSendMessage={handleSendMessage}
+            pdfProgress={pdfProgress}
+            onPreviewAsset={handlePreviewAsset}
+          />
+          <div id="playbook-actions" className="text-center mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+             <button 
+              onClick={handleLogout}
+              className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+            >
+              Logout
+            </button>
+             <button 
+              onClick={handleStartNew}
+              disabled={anyFileGenerationInProgress}
+              className="w-full sm:w-auto px-6 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-300 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Start New Plan
+            </button>
+             <button 
+              onClick={handleDownloadAll}
+              disabled={anyFileGenerationInProgress}
+              className="w-full sm:w-auto px-8 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+              style={{minWidth: '180px', minHeight: '52px'}}
+            >
+              {isZipping ? <CircularProgress progress={zipProgress} /> : 'Download All (ZIP)'}
+            </button>
+            <DropdownButton
+              label="Download Files"
+              options={downloadOptions}
+              isLoading={(isGeneratingPdf && !!pdfType)}
+              progress={pdfProgress}
+            />
+          </div>
+        </div>
+      );
+    }
+    
+    return <Step1Form onSubmit={handleGenerate} />;
+  };
+
   return (
     <>
       {assetToPreview && assetToPreview.asset && (
@@ -561,86 +668,47 @@ const App: React.FC = () => {
             onClose={() => setAssetToPreview(null)} 
         />
       )}
-      <div className="flex flex-col items-center p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col items-center p-4 sm:p-6 md:p-8 min-h-screen">
         <header className="w-full max-w-5xl text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter">
             The <span className="text-yellow-400">Hormozi</span> AI
           </h1>
           <p className="text-gray-400 mt-2">Your Simple Path to Business Growth.</p>
+           {firebaseUser && <p className="text-sm text-gray-500 mt-1">Logged in as: {firebaseUser.email}</p>}
         </header>
         
-        <main className="w-full max-w-5xl">
-          {isLoading && <ProgressBar progress={loadingProgress} loadingText={loadingText} />}
-          {error && (
-              <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg text-center">
+        <main className="w-full max-w-5xl flex-grow">
+            {error && !isLoading && (
+              <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg text-center mb-4">
                   <p className="font-bold">Something went wrong.</p>
                   <p className="mt-2 text-sm">{error}</p>
                   <button 
-                    onClick={resetApp}
-                    className="mt-4 px-4 py-2 bg-yellow-400 text-gray-900 font-bold rounded-md hover:bg-yellow-300 transition-colors"
+                    onClick={() => setError(null)}
+                    className="mt-4 px-4 py-1 bg-yellow-400 text-gray-900 font-bold rounded-md hover:bg-yellow-300 transition-colors text-sm"
                   >
-                    Start Again
+                    Close
                   </button>
               </div>
-          )}
-
-          {!isLoading && !error && (
-            <>
-              {step === 1 && <Step1Form onSubmit={handleFormSubmit} />}
-              {playbook && (
-                <div className="space-y-12">
-                  <FullPlaybook 
-                    playbook={playbook} 
-                    onDownloadAsset={prepareAndDownloadAssetPdf}
-                    isAnyPdfGenerating={anyFileGenerationInProgress}
-                    generatingAsset={generatingAsset}
-                    onDownloadAllAssets={prepareAndDownloadAssetBundlePdf}
-                    generatingAssetBundleFor={generatingAssetBundleFor}
-                    chatHistory={chatHistory}
-                    isChatLoading={isChatLoading}
-                    onSendMessage={handleSendMessage}
-                    pdfProgress={pdfProgress}
-                    onPreviewAsset={handlePreviewAsset}
-                  />
-                  <div id="playbook-actions" className="text-center mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-                     <button 
-                      onClick={resetApp}
-                      disabled={anyFileGenerationInProgress}
-                      className="w-full sm:w-auto px-8 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-300 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Start New Plan
-                    </button>
-                     <button 
-                      onClick={handleDownloadAll}
-                      disabled={anyFileGenerationInProgress}
-                      className="w-full sm:w-auto px-8 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
-                      style={{minWidth: '180px', minHeight: '52px'}}
-                    >
-                      {isZipping ? <CircularProgress progress={zipProgress} /> : 'Download All (ZIP)'}
-                    </button>
-                    <DropdownButton
-                      label="Download Files"
-                      options={downloadOptions}
-                      isLoading={(isGeneratingPdf && !!pdfType)}
-                      progress={pdfProgress}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+            )}
+            {renderContent()}
         </main>
         
         <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
-            <div ref={pdfSingleRenderRef} className="w-[800px]">
-                {playbook && businessData && <AllPdfs playbook={playbook} businessData={businessData} type={pdfType} assetBundle={assetBundleForPdf} />}
-            </div>
-            {assetForPdf && playbook && businessData && (
-              <div ref={pdfAssetRef} className="w-[800px]">
-                 <AllPdfs playbook={playbook} businessData={businessData} type="single-asset" singleAsset={assetForPdf} />
-              </div>
+            {currentUserData?.playbook && currentUserData?.businessData && (
+              <>
+                <div ref={pdfSingleRenderRef} className="w-[800px]">
+                    <AllPdfs playbook={currentUserData.playbook} businessData={currentUserData.businessData} type={pdfType} assetBundle={assetBundleForPdf} />
+                </div>
+                {assetForPdf && (
+                  <div ref={pdfAssetRef} className="w-[800px]">
+                     <AllPdfs playbook={currentUserData.playbook} businessData={currentUserData.businessData} type="single-asset" singleAsset={assetForPdf} />
+                  </div>
+                )}
+                {showAllPdfsForZip && processedPlaybookForZip && (
+                  <AllPdfs playbook={processedPlaybookForZip} businessData={currentUserData.businessData} type="all" />
+                )}
+              </>
             )}
-            {showAllPdfsForZip && processedPlaybookForZip && businessData && <AllPdfs playbook={processedPlaybookForZip} businessData={businessData} type="all" />}
         </div>
 
         <footer className="w-full max-w-5xl text-center mt-12 text-gray-500 text-sm">

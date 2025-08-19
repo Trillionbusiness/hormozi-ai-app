@@ -239,6 +239,15 @@ export interface GeneratedPlaybook {
   accountabilityTracker: GeneratedAccountabilityTracker;
 }
 
+// User data structure for Firestore
+export interface UserData {
+  uid: string;
+  email: string;
+  playbook: GeneratedPlaybook | null;
+  businessData: BusinessData | null;
+}
+
+
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;

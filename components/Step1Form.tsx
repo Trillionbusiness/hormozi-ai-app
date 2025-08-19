@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BusinessData } from '../types';
 import Card from './common/Card';
@@ -79,7 +78,7 @@ const InputField: React.FC<{
                         </svg>
                     ) : (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 3.25a.75.75 0 01.75.75v1.25h1.25a.75.75 0 010 1.5H10.75v1.25a.75.75 0 01-1.5 0V6.75H8a.75.75 0 010-1.5h1.25V3.999a.75.75 0 01.75-.75zM10 16.75a.75.75 0 01-.75-.75v-1.25H8a.75.75 0 010-1.5h1.25v-1.25a.75.75 0 011.5 0v1.25h1.25a.75.75 0 010 1.5H10.75v1.25a.75.75 0 01-.75.75zM3.25 10a.75.75 0 01.75-.75h1.25V8a.75.75 0 011.5 0v1.25h1.25a.75.75 0 010 1.5H6.75v1.25a.75.75 0 01-1.5 0V10.75H4a.75.75 0 01-.75-.75zM16.75 10a.75.75 0 01-.75.75h-1.25v1.25a.75.75 0 01-1.5 0V10.75h-1.25a.75.75 0 010-1.5h1.25V8a.75.75 0 011.5 0v1.25h1.25a.75.75 0 01.75.75z" clipRule="evenodd" />
+                            <path fillRule="evenodd" d="M10 3.25a.75.75 0 01.75.75v1.25h1.25a.75.75 0 010 1.5H10.75v1.25a.75.75 0 01-1.5 0V6.75H8a.75.75 0 010-1.5h1.25V3.999a.75.75 0 01.75-.75zM10 16.75a.75.75 0 01-.75-.75v-1.25H8a.75.75 0 010-1.5h1.25v-1.25a.75.75 0 011.5 0v1.25h1.25a.75.75 0 010 1.5H10.75v1.25a.75.75 0 01-.75-.75zM3.25 10a.75.75 0 01.75-.75h1.25V8a.75.75 0 011.5 0v1.25h1.25a.75.75 0 010 1.5H6.75v1.25a.75.75 0 01-1.5 0V10.75H4a.75.75 0 01-.75-.75zM16.75 10a.75.75 0 01-.75.75h-1.25v1.25a.75.75 0 01-1.5 0V10.75h-1.25a.75.75 0 010-1.5h1.25V8a.75.75 0 011.5 0v1.25h1.25a.75.75 0 01.75-.75z" clipRule="evenodd" />
                         </svg>
                     )}
                 </button>
@@ -225,7 +224,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
   return (
     <Card>
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Start Your Plan.</h2>
+        <h2 className="text-2xl font-bold text-white">Let's Create Your Plan.</h2>
         <p className="text-gray-400 mt-2">{subheaderText}</p>
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
             <select
@@ -250,7 +249,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
 
-        <FormSectionHeader>Your Situation</FormSectionHeader>
+        <FormSectionHeader>1. Your Situation</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6 items-start">
             <RadioGroupField
                 id="businessStage"
@@ -276,7 +275,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             )}
         </div>
         
-        <FormSectionHeader>Your Business</FormSectionHeader>
+        <FormSectionHeader>2. Your Business</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="businessType" label="Business Type or Idea" value={formData.businessType} onChange={handleChange} placeholder="e.g., SaaS, Coaching, Agency" onAutofill={() => handleGenerateField('businessType')} isAutofilling={generatingField === 'businessType'} />
             <InputField id="location" label="City & State/Province" value={formData.location} onChange={handleChange} placeholder="e.g., Austin, Texas" />
@@ -292,7 +291,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             <InputField id="monthlyRevenue" label="Current Monthly Revenue (use 0 for new ideas)" value={formData.monthlyRevenue} onChange={handleChange} placeholder="e.g., 50000" type="text" />
         </div>
 
-        <FormSectionHeader>Your Offer</FormSectionHeader>
+        <FormSectionHeader>3. Your Offer</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="marketingMethods" label="Current or Planned Marketing" value={formData.marketingMethods} onChange={handleChange} placeholder="e.g., Social Media, Referrals" onAutofill={() => handleGenerateField('marketingMethods')} isAutofilling={generatingField === 'marketingMethods'} />
             <InputField id="biggestChallenge" label="Biggest Challenge or Question" value={formData.biggestChallenge} onChange={handleChange} placeholder="What holds you back?" onAutofill={() => handleGenerateField('biggestChallenge')} isAutofilling={generatingField === 'biggestChallenge'} />
@@ -309,7 +308,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
             </div>
         </div>
 
-        <FormSectionHeader>Your Tools & Goals</FormSectionHeader>
+        <FormSectionHeader>4. Your Tools & Goals</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6">
             <InputField id="dailyTimeCommitment" label="Daily Hours for Growth" value={formData.dailyTimeCommitment} onChange={handleChange} placeholder="e.g., 2" type="number" />
             <InputField id="profitGoal" label="Desired Monthly Profit" value={formData.profitGoal} onChange={handleChange} placeholder="e.g., 100000" type="text" />
