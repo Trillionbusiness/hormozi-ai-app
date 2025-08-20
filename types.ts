@@ -1,3 +1,4 @@
+
 export interface BusinessData {
   country: string;
   currency: string;
@@ -239,27 +240,14 @@ export interface GeneratedPlaybook {
   accountabilityTracker: GeneratedAccountabilityTracker;
 }
 
-// --- Local Storage User Management ---
-export interface User {
-  username: string;
-  password?: string; // Hashed password for storage
-  businessData: BusinessData | null;
-  playbook: GeneratedPlaybook | null;
-}
-
-export interface Users {
-  [username: string]: User;
-}
-
-// --- Firebase User Management ---
-export interface UserData {
-  uid: string;
-  email: string;
-  businessData: BusinessData | null;
-  playbook: GeneratedPlaybook | null;
-}
-
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
+}
+
+export interface UserData {
+  uid: string;
+  email: string;
+  playbook: GeneratedPlaybook | null;
+  businessData: BusinessData | null;
 }

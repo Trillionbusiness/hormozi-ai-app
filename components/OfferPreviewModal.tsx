@@ -6,9 +6,10 @@ import MarkdownRenderer from './common/MarkdownRenderer';
 interface OfferPreviewModalProps {
   asset: NonNullable<OfferStackItem['asset']>;
   onClose: () => void;
+  onDownload: () => void;
 }
 
-const OfferPreviewModal: React.FC<OfferPreviewModalProps> = ({ asset, onClose }) => {
+const OfferPreviewModal: React.FC<OfferPreviewModalProps> = ({ asset, onClose, onDownload }) => {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div 
@@ -28,6 +29,15 @@ const OfferPreviewModal: React.FC<OfferPreviewModalProps> = ({ asset, onClose })
 
         <div className="flex-grow overflow-y-auto bg-gray-900/50 p-4 md:p-6 rounded-lg border border-gray-700">
           <MarkdownRenderer content={asset.content} theme="dark" />
+        </div>
+        
+        <div className="mt-6 text-center">
+            <button
+                onClick={onDownload}
+                className="px-6 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-300 transition-colors transform hover:scale-105"
+            >
+                Download PDF
+            </button>
         </div>
       </div>
     </div>

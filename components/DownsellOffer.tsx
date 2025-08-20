@@ -1,12 +1,12 @@
 
-
 import React from 'react';
-import { GeneratedDownsell, OfferStackItem } from '../types';
+import { GeneratedDownsell, OfferStackItem, GeneratedOffer } from '../types';
 import Card, { StrategyAccordion } from './common/Card';
 
 interface DownsellOfferProps {
   downsell: GeneratedDownsell;
   onPreviewAsset: (item: OfferStackItem) => void;
+  onDownloadAssetBundle: (offer: GeneratedOffer) => void;
   isStatic?: boolean;
 }
 
@@ -14,7 +14,7 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   <h3 className="text-2xl font-black text-white tracking-tight border-b-2 border-yellow-400 pb-2 mb-6">{children}</h3>
 );
 
-const DownsellOffer: React.FC<DownsellOfferProps> = ({ downsell, onPreviewAsset, isStatic = false }) => {
+const DownsellOffer: React.FC<DownsellOfferProps> = ({ downsell, onPreviewAsset, onDownloadAssetBundle, isStatic = false }) => {
   if (!downsell?.offer) {
     return null;
   }
@@ -36,7 +36,17 @@ const DownsellOffer: React.FC<DownsellOfferProps> = ({ downsell, onPreviewAsset,
                 <p className="text-gray-400 italic mb-6">"{offer.promise}"</p>
                 
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold text-gray-300 mb-2">Here is what you get:</p>
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-semibold text-gray-300">Here is what you get:</p>
+                        {!isStatic && (
+                            <button
+                                onClick={() => onDownloadAssetBundle(offer)}
+                                className="px-3 py-1 text-xs font-bold rounded capitalize bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                            >
+                                Download Assets
+                            </button>
+                        )}
+                    </div>
                   {offer.stack.map((item, index) => (
                        <div key={index} className="bg-gray-700/60 p-4 rounded-lg text-sm border-l-2 border-gray-600">
                           <div className="flex justify-between items-start gap-4">
@@ -52,7 +62,7 @@ const DownsellOffer: React.FC<DownsellOfferProps> = ({ downsell, onPreviewAsset,
                                     onClick={() => onPreviewAsset(item)}
                                     className="px-3 py-1 text-xs font-bold rounded capitalize bg-gray-600 text-white hover:bg-gray-500 transition-colors"
                                 >
-                                    Preview
+                                    Preview Asset
                                 </button>
                             </div>
                           )}
