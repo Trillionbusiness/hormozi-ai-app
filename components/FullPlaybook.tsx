@@ -17,16 +17,10 @@ import PlaybookChat from './PlaybookChat';
 
 interface FullPlaybookProps {
     playbook: GeneratedPlaybook;
-    onDownloadAsset: (item: OfferStackItem) => void;
     onPreviewAsset: (item: OfferStackItem) => void;
-    isAnyPdfGenerating: boolean;
-    generatingAsset: OfferStackItem | null;
-    onDownloadAllAssets: (offer: GeneratedOffer) => void;
-    generatingAssetBundleFor: string | null;
     chatHistory: ChatMessage[];
     isChatLoading: boolean;
     onSendMessage: (message: string) => void;
-    pdfProgress: number;
     isStatic?: boolean;
 }
 
@@ -79,16 +73,10 @@ const PlaybookStep: React.FC<PlaybookStepProps> = ({ number, title, subtitle, ch
 
 const FullPlaybook: React.FC<FullPlaybookProps> = ({ 
     playbook, 
-    onDownloadAsset, 
     onPreviewAsset,
-    isAnyPdfGenerating,
-    generatingAsset,
-    onDownloadAllAssets,
-    generatingAssetBundleFor,
     chatHistory,
     isChatLoading,
     onSendMessage,
-    pdfProgress,
     isStatic = false,
 }) => {
   const [openStep, setOpenStep] = useState<number | null>(isStatic ? -1 : 1);
@@ -102,8 +90,8 @@ const FullPlaybook: React.FC<FullPlaybookProps> = ({
     { number: 1, title: 'Your Diagnosis', subtitle: 'The simple truth about your business right now.', component: <Step2Diagnosis diagnosis={playbook.diagnosis} /> },
     { number: 2, title: 'Your Money Plan', subtitle: 'The before-and-after of how you make money.', component: <MoneyModelAnalysis analysis={playbook.moneyModelAnalysis} /> },
     { number: 3, title: 'Your Money Toolkit', subtitle: 'Four powerful ways to get paid.', component: <MoneyModelMechanisms moneyModelMechanisms={playbook.moneyModelMechanisms} /> },
-    { number: 4, title: 'Your Offers', subtitle: 'The irresistible deals that will grow your business.', component: <Step3Offers offer1={playbook.offer1} offer2={playbook.offer2} onDownloadAsset={onDownloadAsset} onPreviewAsset={onPreviewAsset} isAnyPdfGenerating={isAnyPdfGenerating} generatingAsset={generatingAsset} onDownloadAllAssets={onDownloadAllAssets} generatingAssetBundleFor={generatingAssetBundleFor} pdfProgress={pdfProgress} isStatic={isStatic} /> },
-    { number: 5, title: 'Your "Hello" Offer', subtitle: 'A simple, low-cost offer to attract new customers.', component: <DownsellOffer downsell={playbook.downsell} onDownloadAsset={onDownloadAsset} onPreviewAsset={onPreviewAsset} isAnyPdfGenerating={isAnyPdfGenerating} generatingAsset={generatingAsset} pdfProgress={pdfProgress} isStatic={isStatic}/> },
+    { number: 4, title: 'Your Offers', subtitle: 'The irresistible deals that will grow your business.', component: <Step3Offers offer1={playbook.offer1} offer2={playbook.offer2} onPreviewAsset={onPreviewAsset} isStatic={isStatic} /> },
+    { number: 5, title: 'Your "Hello" Offer', subtitle: 'A simple, low-cost offer to attract new customers.', component: <DownsellOffer downsell={playbook.downsell} onPreviewAsset={onPreviewAsset} isStatic={isStatic}/> },
     { number: 6, title: 'Your Profit Path', subtitle: 'Four steps to make more money from every customer.', component: <Step4ProfitPath profitPath={playbook.profitPath} isStatic={isStatic} /> },
     { number: 7, title: 'Your Marketing Model', subtitle: 'Four ways to find your ideal customers.', component: <Step5MarketingModel marketingModel={playbook.marketingModel} isStatic={isStatic} /> },
     { number: 8, title: 'Your Money Funnel', subtitle: 'The step-by-step customer journey to profit.', component: <MoneyModelFunnel moneyModel={playbook.moneyModel} /> },

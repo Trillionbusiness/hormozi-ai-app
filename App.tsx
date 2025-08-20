@@ -1,7 +1,6 @@
 
-declare var JSZip: any;
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, User, Users } from './types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, User, Users, GeneratedDiagnosis, GeneratedMoneyModelAnalysis, GeneratedMoneyModelMechanisms, GeneratedDownsell, GeneratedProfitPath, GeneratedMarketingModel, GeneratedMoneyModel, GeneratedSalesFunnel, GeneratedOperationsPlan, GeneratedKpiDashboard, GeneratedAccountabilityTracker } from './types';
 import { 
     generateDiagnosis, generateMoneyModelAnalysis, generateMoneyModel, 
     generateMoneyModelMechanisms, generateOperationsPlan, generateOffer1, 
@@ -14,8 +13,6 @@ import Step1Form from './components/Step1Form';
 import ProgressBar from './components/common/ProgressBar';
 import CircularProgress from './components/common/CircularProgress';
 import FullPlaybook from './components/FullPlaybook';
-import DropdownButton from './components/common/DropdownButton';
-import AllPdfs from './components/pdf/AllPdfs';
 import OfferPreviewModal from './components/OfferPreviewModal';
 import Auth from './components/Auth';
 
@@ -28,25 +25,15 @@ const App: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('Starting...');
 
-  const [pdfProgress, setPdfProgress] = useState(0);
-  const [zipProgress, setZipProgress] = useState(0);
+  // Repurposed for HTML download status
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
-  const [isZipping, setIsZipping] = useState<boolean>(false);
-  const [pdfType, setPdfType] = useState<string | null>(null);
-  const [assetForPdf, setAssetForPdf] = useState<NonNullable<OfferStackItem['asset']> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generatingAsset, setGeneratingAsset] = useState<OfferStackItem | null>(null);
-  const [assetBundleForPdf, setAssetBundleForPdf] = useState<GeneratedOffer | null>(null);
-  const [generatingAssetBundleFor, setGeneratingAssetBundleFor] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
-  const [showAllPdfsForZip, setShowAllPdfsForZip] = useState(false);
-  const [processedPlaybookForZip, setProcessedPlaybookForZip] = useState<GeneratedPlaybook | null>(null);
   const [assetToPreview, setAssetToPreview] = useState<OfferStackItem | null>(null);
-
-  const pdfSingleRenderRef = useRef<HTMLDivElement>(null);
-  const pdfAssetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -107,7 +94,6 @@ const App: React.FC = () => {
             // @ts-ignore
             fullPlaybook[steps[i].key] = await steps[i].fn();
             setLoadingProgress(((i + 1) / steps.length) * 100);
-            // Add a delay to avoid hitting API rate limits
             if (i < steps.length - 1) await delay(2000);
         }
         
@@ -177,96 +163,6 @@ const App: React.FC = () => {
     }
   };
   
-  const prepareAndDownloadPdf = useCallback((type: string) => {
-    if (isGeneratingPdf || isZipping) return;
-    setAssetBundleForPdf(null);
-    setAssetForPdf(null);
-    setPdfType(type);
-    setIsGeneratingPdf(true);
-    setPdfProgress(0);
-  }, [isGeneratingPdf, isZipping]);
-  
-  const prepareAndDownloadAssetPdf = useCallback(async (item: OfferStackItem) => {
-    if (!item.asset || !currentUser?.businessData || isGeneratingPdf || isZipping) {
-        if (!item.asset || !currentUser?.businessData) setError("Cannot generate asset: Missing asset details or business context.");
-        return;
-    }
-    
-    setAssetBundleForPdf(null);
-    setPdfType(null);
-    setIsGeneratingPdf(true);
-    setPdfProgress(0);
-    setGeneratingAsset(item);
-    
-    try {
-        let contentToUse = item.asset.content;
-        
-        setPdfProgress(25);
-        if (!contentToUse || contentToUse.trim() === '' || contentToUse.length < 50) {
-            contentToUse = await generateAssetContent(item, currentUser.businessData);
-        }
-        setPdfProgress(75);
-
-        setAssetForPdf({
-            ...item.asset,
-            name: item.asset.name,
-            content: contentToUse
-        });
-        
-    } catch (err) {
-        setError(err instanceof Error ? `Asset Generation Failed: ${err.message}` : 'An unknown error occurred during asset generation.');
-        setIsGeneratingPdf(false);
-        setGeneratingAsset(null);
-    }
-  }, [currentUser?.businessData, isGeneratingPdf, isZipping]);
-  
-  const prepareAndDownloadAssetBundlePdf = useCallback(async (offer: GeneratedOffer) => {
-    if (!currentUser?.businessData || isGeneratingPdf || isZipping) {
-        if(!currentUser?.businessData) setError("Cannot generate assets: Missing business context.");
-        return;
-    }
-
-    setIsGeneratingPdf(true);
-    setPdfProgress(0);
-    setGeneratingAssetBundleFor(offer.name);
-    setPdfType(null);
-    setAssetForPdf(null);
-
-    try {
-        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-        const assetsToProcess = offer.stack.filter(item => item.asset);
-        const totalAssets = assetsToProcess.length;
-        let assetsProcessed = 0;
-        const processedStack: OfferStackItem[] = [];
-        
-        // Create a map of the original stack for easy lookup
-        const originalStackMap = new Map(offer.stack.map((item, index) => [index, item]));
-
-        for (const [index, item] of offer.stack.entries()) {
-             if (!item.asset) {
-                processedStack.push(item);
-                continue;
-            }
-            let newContent = item.asset.content;
-            if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
-                newContent = await generateAssetContent(item, currentUser.businessData!);
-                await delay(2000); // Add a delay after each generation
-            }
-            assetsProcessed++;
-            setPdfProgress((assetsProcessed / totalAssets) * 90); // Process up to 90%
-            processedStack.push({ ...item, asset: { ...item.asset, content: newContent } });
-        }
-        
-        const offerWithContent = { ...offer, stack: processedStack };
-        setAssetBundleForPdf(offerWithContent);
-        
-    } catch (err) {
-        setError(err instanceof Error ? `Asset Bundle Generation Failed: ${err.message}` : 'An unknown error occurred during asset bundle generation.');
-        setIsGeneratingPdf(false);
-        setGeneratingAssetBundleFor(null);
-    }
-  }, [currentUser?.businessData, isGeneratingPdf, isZipping]);
-
   const processAllAssets = async (playbookToProcess: GeneratedPlaybook) => {
     if (!currentUser?.businessData) return playbookToProcess;
 
@@ -289,7 +185,7 @@ const App: React.FC = () => {
                 await delay(2000); // Delay after each asset generation
             }
             assetsProcessed++;
-            setZipProgress((assetsProcessed / totalAssets) * 50); // Asset processing is first 50%
+            setDownloadProgress((assetsProcessed / totalAssets) * 80); // Asset processing is first 80%
             processedStack.push({ ...item, asset: { ...item.asset, content: newContent }});
         }
         return { ...offer, stack: processedStack };
@@ -308,58 +204,342 @@ const App: React.FC = () => {
     };
   };
 
-  const handleDownloadAll = async () => {
-    if (!currentUser?.playbook || isZipping || isGeneratingPdf) return;
-    setIsZipping(true);
-    setZipProgress(0);
-    setError(null);
-    try {
-      const processed = await processAllAssets(currentUser.playbook);
-      setProcessedPlaybookForZip(processed);
-      setShowAllPdfsForZip(true);
-    } catch(err) {
-      setError(err instanceof Error ? `Asset Processing Failed: ${err.message}` : 'An unknown error occurred while preparing assets.');
-      setIsZipping(false);
-    }
-  };
-
   const handlePreviewAsset = useCallback(async (item: OfferStackItem) => {
     if (!item.asset || !currentUser?.businessData) {
         setError("Cannot preview asset: Missing asset details or business context.");
         return;
     }
     
+    setGeneratingAsset(item);
     if (!item.asset.content || item.asset.content.trim() === '' || item.asset.content.length < 50) {
         try {
             const newContent = await generateAssetContent(item, currentUser.businessData);
             setAssetToPreview({ ...item, asset: { ...item.asset, content: newContent } });
         } catch (err) {
             setError(err instanceof Error ? `Asset Generation Failed: ${err.message}` : 'An unknown error occurred during asset generation.');
+        } finally {
+            setGeneratingAsset(null);
         }
     } else {
         setAssetToPreview(item);
+        setGeneratingAsset(null);
     }
   }, [currentUser?.businessData]);
 
   const generateOfflineIndexHtml = (playbook: GeneratedPlaybook, businessData: BusinessData): string => {
-    const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '').replace(/ /g, '_');
     
-    const assetLinks = (offer: GeneratedOffer, folderPath: string) => 
-        offer.stack.filter(i => i.asset).map(item => 
-            `<li><a href="./${folderPath}/${sanitizeName(item.asset.type)}_${sanitizeName(item.asset.name)}.pdf" download>${item.asset.name}</a></li>`
-        ).join('');
+    // --- Helper functions for rendering HTML sections ---
+    const escapeHtml = (unsafe: string | undefined | null) => (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
-    const offerSection = (offer: GeneratedOffer, title: string) => {
-        const folder = `04_Asset_Library/${sanitizeName(offer.name)}`;
-        return `
-            <div class="offer-group">
-                <h3>${title}: <span class="offer-name">${offer.name}</span></h3>
-                <ul>
-                    <li><a href="./${folder}/00_Full_Asset_Bundle.pdf" download><strong>Full Asset Bundle (PDF)</strong></a></li>
-                    ${assetLinks(offer, folder)}
-                </ul>
-            </div>`;
-    };
+    const renderDiagnosis = (data: GeneratedDiagnosis) => `
+      <div class="card">
+        <h2>1. Your Diagnosis</h2>
+        <p class="subtitle">The simple truth about your business right now.</p>
+        <div class="section">
+          <h3>Your Current Stage</h3>
+          <p class="highlight">${escapeHtml(data.currentStage)}</p>
+        </div>
+        <div class="section">
+          <h3>Your Primary Role</h3>
+          <p class="highlight">${escapeHtml(data.yourRole)}</p>
+        </div>
+        <div class="section">
+          <h3>What's Holding You Back (Constraints)</h3>
+          <ul>${data.constraints.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+        </div>
+        <div class="section">
+          <h3>Your Action Plan (The Path Forward)</h3>
+          <ol>${data.actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ol>
+        </div>
+      </div>
+    `;
+
+    const renderMoneyModelAnalysis = (data: GeneratedMoneyModelAnalysis) => `
+      <div class="card">
+        <h2>2. Your Money Plan</h2>
+        <p class="subtitle">The before-and-after of how you make money.</p>
+        <div class="grid">
+          <div class="model-card old">
+            <h4>${escapeHtml(data.oldModel.title)}</h4>
+            <p>${escapeHtml(data.oldModel.description)}</p>
+            <ul>${data.oldModel.metrics.map(m => `<li><span>${escapeHtml(m.label)}:</span> <strong>${escapeHtml(m.value)}</strong></li>`).join('')}</ul>
+          </div>
+          <div class="model-card new">
+            <h4>${escapeHtml(data.newModel.title)}</h4>
+            <p>${escapeHtml(data.newModel.description)}</p>
+            <ul>${data.newModel.metrics.map(m => `<li><span>${escapeHtml(m.label)}:</span> <strong>${escapeHtml(m.value)}</strong></li>`).join('')}</ul>
+          </div>
+        </div>
+        <div class="section">
+            <h3>Projected Economics</h3>
+            <p>${escapeHtml(data.projectedEconomics.explanation)}</p>
+            <ul>
+                <li><span>Estimated CAC:</span> <strong>${escapeHtml(data.projectedEconomics.estimatedCAC)}</strong></li>
+                <li><span>Target LTV:</span> <strong>${escapeHtml(data.projectedEconomics.targetLTV)}</strong></li>
+                <li><span>Immediate Profit:</span> <strong class="profit">${escapeHtml(data.projectedEconomics.immediateProfit)}</strong></li>
+            </ul>
+        </div>
+      </div>
+    `;
+    
+    const renderMoneyModelMechanisms = (data: GeneratedMoneyModelMechanisms) => `
+        <div class="card">
+            <h2>3. Your Money Toolkit</h2>
+            <p class="subtitle">Four powerful ways to get paid.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            ${data.mechanisms.map(m => `
+                <div class="section mechanism-card">
+                    <h3>${escapeHtml(m.mechanismType)}: ${escapeHtml(m.tacticName)}</h3>
+                    <h4>Strategy</h4>
+                    <p>${escapeHtml(m.strategy)}</p>
+                    <h4>Example</h4>
+                    <p class="example-box">${escapeHtml(m.example)}</p>
+                    <h4>Implementation</h4>
+                    <pre>${escapeHtml(m.implementationNotes)}</pre>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    const renderOffer = (offer: GeneratedOffer, title: string) => `
+      <div class="offer-card">
+        <h3>${escapeHtml(title)}: ${escapeHtml(offer.name)}</h3>
+        <p class="promise">"${escapeHtml(offer.promise)}"</p>
+        <h4>What You Get (The Stack):</h4>
+        <ul class="stack">
+          ${offer.stack.map(item => `
+            <li>
+              <div class="solution">
+                <span>${escapeHtml(item.solution)}</span>
+                <span class="value">${escapeHtml(item.value)}</span>
+              </div>
+              <div class="problem">Solves: ${escapeHtml(item.problem)}</div>
+              ${item.asset && item.asset.content ? `
+              <details class="asset-details">
+                <summary>Asset: ${escapeHtml(item.asset.name)} (${escapeHtml(item.asset.type)}) - Click to expand</summary>
+                <div class="asset-content">
+                  <pre>${escapeHtml(item.asset.content)}</pre>
+                </div>
+              </details>
+              ` : `
+              <div class="asset-name">Asset: ${escapeHtml(item.asset.name)} (${escapeHtml(item.asset.type)})</div>
+              `}
+            </li>
+          `).join('')}
+        </ul>
+        <div class="section">
+          <h4>Strategy Behind The Stack</h4>
+          <p>${escapeHtml(offer.strategyBehindStack)}</p>
+        </div>
+        <div class="pricing">
+            <div>
+                <span>Total Value:</span>
+                <span class="value-old">${escapeHtml(offer.totalValue)}</span>
+            </div>
+            <div>
+                <span>Your Price:</span>
+                <span class="price-new">${escapeHtml(offer.price)}</span>
+            </div>
+        </div>
+        <div class="guarantee">
+            <h4>Our Promise:</h4>
+            <p>"${escapeHtml(offer.guarantee)}"</p>
+        </div>
+      </div>
+    `;
+
+    const renderOffers = (playbook: GeneratedPlaybook) => `
+        <div class="card">
+            <h2>4. Your Offers</h2>
+            <p class="subtitle">The irresistible deals that will grow your business.</p>
+            <div class="grid">
+                ${renderOffer(playbook.offer1, "Grand Slam Offer 1")}
+                ${renderOffer(playbook.offer2, "Grand Slam Offer 2")}
+            </div>
+        </div>
+    `;
+    
+    const renderDownsell = (downsell: GeneratedDownsell) => `
+        <div class="card">
+            <h2>5. Your "Hello" Offer</h2>
+            <p class="subtitle">A simple, low-cost offer to attract new customers.</p>
+            <div class="section">
+                <h4>Rationale</h4>
+                <p>${escapeHtml(downsell.rationale)}</p>
+            </div>
+            ${renderOffer(downsell.offer, "Downsell Offer")}
+        </div>
+    `;
+
+    const renderProfitPath = (data: GeneratedProfitPath) => `
+        <div class="card">
+            <h2>6. Your Profit Path</h2>
+            <p class="subtitle">Four steps to make more money from every customer.</p>
+            ${data.steps.map((step, index) => `
+                <div class="section profit-path-step">
+                    <h3>${index + 1}. ${escapeHtml(step.title)}</h3>
+                    <p><strong>Action:</strong> ${escapeHtml(step.action)}</p>
+                    <p><strong>Example:</strong> ${escapeHtml(step.example)}</p>
+                    ${step.script ? `<h4>Script:</h4><pre>${escapeHtml(step.script)}</pre>` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    const renderMarketingModel = (data: GeneratedMarketingModel) => `
+        <div class="card">
+            <h2>7. Your Marketing Model</h2>
+            <p class="subtitle">Four ways to find your ideal customers.</p>
+            ${data.steps.map(step => `
+                <div class="section">
+                    <h3>${escapeHtml(step.method)}</h3>
+                    <p><strong>Strategy:</strong> ${escapeHtml(step.strategy)}</p>
+                    <p><strong>Example:</strong> ${escapeHtml(step.example)}</p>
+                    ${step.template ? `<h4>Template:</h4><pre>${escapeHtml(step.template)}</pre>` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    const renderMoneyModelFunnel = (data: GeneratedMoneyModel) => `
+        <div class="card">
+            <h2>8. Your Money Funnel</h2>
+            <p class="subtitle">The step-by-step customer journey to profit.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            ${data.steps.map(step => `
+                <div class="section money-funnel-step">
+                    <h3>Step ${step.stepNumber}: ${escapeHtml(step.title)}</h3>
+                    <h4>${escapeHtml(step.offerName)} - ${escapeHtml(step.price)}</h4>
+                    <p><strong>Tactic:</strong> ${escapeHtml(step.hormoziTactic)}</p>
+                    <p><strong>Rationale:</strong> ${escapeHtml(step.rationale)}</p>
+                    <p><strong>Details:</strong> ${escapeHtml(step.details)}</p>
+                </div>
+            `).join('')}
+            <div class="section">
+                <h3>Summary</h3>
+                <p>${escapeHtml(data.summary)}</p>
+            </div>
+        </div>
+    `;
+    
+    const renderSalesFunnel = (data: GeneratedSalesFunnel) => `
+        <div class="card">
+            <h2>9. Your Sales Funnel</h2>
+            <p class="subtitle">How to turn strangers into buyers.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            ${data.stages.map((stage, index) => `
+                <div class="section sales-funnel-stage">
+                    <h3>Stage ${index + 1}: ${escapeHtml(stage.stageName)}</h3>
+                    <p><strong>Goal:</strong> ${escapeHtml(stage.goal)}</p>
+                    <p><strong>Key Metric:</strong> ${escapeHtml(stage.keyMetric)}</p>
+                    <h4>Ad Copy</h4>
+                    <ul>
+                        <li><strong>Headline:</strong> ${escapeHtml(stage.adCopy.headline)}</li>
+                        <li><strong>Body:</strong> ${escapeHtml(stage.adCopy.body)}</li>
+                        <li><strong>CTA:</strong> ${escapeHtml(stage.adCopy.cta)}</li>
+                    </ul>
+                    <h4>Landing Page</h4>
+                    <ul>
+                        <li><strong>Headline:</strong> ${escapeHtml(stage.landingPage.headline)}</li>
+                        <li><strong>Elements:</strong> ${escapeHtml(stage.landingPage.elements.join(', '))}</li>
+                    </ul>
+                    <h4>Sales Process</h4>
+                    <ul>
+                        <li><strong>Step:</strong> ${escapeHtml(stage.salesProcess.step)}</li>
+                        <li><strong>Focus:</strong> ${escapeHtml(stage.salesProcess.scriptFocus)}</li>
+                    </ul>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    const renderOperationsPlan = (data: GeneratedOperationsPlan) => `
+        <div class="card">
+            <h2>10. Your Operations Plan</h2>
+            <p class="subtitle">The simple way to run your business.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            <div class="section">
+                <h3>Activities & Outcomes</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Outcome</th>
+                            <th>Activity</th>
+                            <th>Time Allocation</th>
+                            <th>Frequency</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.outcomesAndActivities.map(item => `
+                            <tr>
+                                <td>${escapeHtml(item.outcome)}</td>
+                                <td>${escapeHtml(item.activity)}</td>
+                                <td>${escapeHtml(item.timeAllocation)}</td>
+                                <td>${escapeHtml(item.frequency)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+             <div class="section">
+                <h3>Bottleneck Analysis</h3>
+                <p>${escapeHtml(data.bottleneckAnalysis)}</p>
+            </div>
+            <div class="section">
+                <h3>Proposed Roles</h3>
+                ${data.proposedRoles.map(role => `
+                    <div class="role-card">
+                        <h4>${escapeHtml(role.roleTitle)}</h4>
+                        <p><strong>Key Metric:</strong> ${escapeHtml(role.keyMetric)}</p>
+                        <p><strong>Responsibilities:</strong></p>
+                        <ul>${role.responsibilities.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+                        <p><strong>Daily Structure:</strong></p>
+                        <pre>${escapeHtml(role.dailyStructure)}</pre>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    const renderKpiDashboard = (data: GeneratedKpiDashboard) => `
+        <div class="card">
+            <h2>11. Your Scorecard</h2>
+            <p class="subtitle">The key numbers that tell you if you're winning.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            ${data.kpis.map(kpi => `
+                <div class="section kpi-card">
+                    <h3>${escapeHtml(kpi.name)} <span class="perspective">(${escapeHtml(kpi.perspective)})</span></h3>
+                    <p>${escapeHtml(kpi.description)}</p>
+                    <p><strong>Formula:</strong> <code>${escapeHtml(kpi.formula)}</code></p>
+                    <p><strong>How to Measure:</strong> ${escapeHtml(kpi.howToMeasure)}</p>
+                    <p><strong>Importance:</strong> ${escapeHtml(kpi.importance)}</p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    const renderAccountabilityTracker = (data: GeneratedAccountabilityTracker) => `
+        <div class="card">
+            <h2>12. Your Growth Tracker</h2>
+            <p class="subtitle">The simple way to test ideas and track what works.</p>
+            <div class="principle-box">${escapeHtml(data.corePrinciple)}</div>
+            ${data.phases.map(phase => `
+                <div class="section phase-card">
+                    <h3>Phase ${phase.phaseNumber}: ${escapeHtml(phase.title)}</h3>
+                    <p class="goal"><strong>Goal:</strong> ${escapeHtml(phase.goal)}</p>
+                    <h4>Actions:</h4>
+                    <ol>
+                        ${phase.actions.map(action => `<li>${escapeHtml(action.description)} (Metric: ${escapeHtml(action.metric)})</li>`).join('')}
+                    </ol>
+                    <h4>Daily Checklist:</h4>
+                    <ul>
+                        ${phase.dailyChecklist.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
 
     return `
 <!DOCTYPE html>
@@ -367,391 +547,221 @@ const App: React.FC = () => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hormozi AI Business Plan</title>
+    <title>Hormozi AI Business Plan (Offline)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #E5E7EB; margin: 0; padding: 2rem; }
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #E5E7EB; margin: 0; padding: 2rem; line-height: 1.6; }
         .container { max-width: 900px; margin: auto; }
         header { text-align: center; border-bottom: 4px solid #FBBF24; padding-bottom: 1.5rem; margin-bottom: 2rem; }
         h1 { font-size: 3rem; font-weight: 900; margin: 0; color: white; }
         h1 span { color: #FBBF24; }
-        header p { color: #9CA3AF; font-size: 1.25rem; margin-top: 0.5rem; }
         h2 { font-size: 2rem; font-weight: 900; color: #FBBF24; border-bottom: 2px solid #4B5563; padding-bottom: 0.5rem; margin-top: 3rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
-        .card { background-color: #1F2937; border: 1px solid #374151; padding: 1.5rem; border-radius: 0.75rem; }
-        .card h3 { font-size: 1.5rem; font-weight: 700; color: white; margin-top: 0; margin-bottom: 1rem; }
-        ul { list-style: none; padding: 0; }
-        li { margin-bottom: 0.75rem; }
-        a { color: #60A5FA; text-decoration: none; font-weight: bold; background-color: #374151; padding: 0.5rem 1rem; border-radius: 0.375rem; display: block; transition: background-color 0.2s, color 0.2s; }
-        a:hover { background-color: #4B5563; color: white; }
-        strong { color: #FBBF24; }
-        .offer-group { margin-top: 1.5rem; background-color: #1a222e; padding: 1.5rem; border-radius: 0.5rem; border-left: 4px solid #FBBF24; }
-        .offer-group h3 { margin-top: 0; font-size: 1.25rem; color: #FBBF24;}
-        .offer-name { color: white; }
-        footer { text-align: center; margin-top: 4rem; font-size: 0.875rem; color: #6B7280; }
+        h3 { font-size: 1.5rem; font-weight: 700; color: white; margin-top: 1.5rem; margin-bottom: 1rem; }
+        h4 { font-size: 1.2rem; font-weight: 700; color: #FBBF24; margin-top: 1rem; margin-bottom: 0.5rem; }
+        p { margin-bottom: 1rem; }
+        ul, ol { padding-left: 20px; margin-bottom: 1rem; }
+        li { margin-bottom: 0.5rem; }
+        code, pre { font-family: 'Courier New', Courier, monospace; background-color: #1F2937; padding: 0.2em 0.4em; border-radius: 0.25rem; }
+        pre { padding: 1rem; white-space: pre-wrap; word-wrap: break-word; }
+        .card { background-color: #1F2937; border: 1px solid #374151; padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 2rem; }
+        .subtitle { color: #9CA3AF; margin-top: -0.5rem; }
+        .section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151; }
+        .card > .section:first-of-type { border-top: none; margin-top: 0; padding-top: 0;}
+        .highlight { font-size: 1.25rem; font-weight: bold; color: #FBBF24; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .model-card { padding: 1rem; border-radius: 0.5rem; }
+        .model-card.old { background-color: #450a0a; border: 1px solid #7f1d1d; }
+        .model-card.new { background-color: #14532d; border: 1px solid #166534; }
+        .model-card h4 { color: white; }
+        .model-card ul { list-style: none; padding: 0; }
+        .model-card li { display: flex; justify-content: space-between; font-size: 0.9rem; border-top: 1px solid #4B5563; padding-top: 0.5rem; }
+        .profit { color: #4ade80; font-weight: bold; }
+        .principle-box { background-color: #111827; border: 1px solid #4B5563; padding: 1rem; border-radius: 0.5rem; text-align: center; font-style: italic; color: #FBBF24; margin-bottom: 1.5rem; }
+        .offer-card { background-color: #111827; border: 1px solid #4B5563; padding: 1.5rem; border-radius: 0.5rem; }
+        .promise { font-style: italic; font-size: 1.25rem; color: #D1D5DB; text-align: center; margin-bottom: 1rem; }
+        .stack { list-style: none; padding: 0; }
+        .stack li { background-color: #374151; padding: 0.75rem; border-radius: 0.25rem; border-left: 4px solid #FBBF24; }
+        .solution { display: flex; justify-content: space-between; align-items: flex-start; }
+        .solution span:first-child { font-weight: bold; }
+        .problem { font-size: 0.9rem; color: #9CA3AF; }
+        .asset-name { font-size: 0.9rem; font-style: italic; color: #6B7280; }
+        .asset-details { background-color: #374151; border-radius: 0.25rem; margin-top: 0.5rem; border-left: 4px solid #FBBF24; }
+        .asset-details summary { padding: 0.5rem; cursor: pointer; font-weight: bold; color: #FBBF24; font-size: 0.9rem; }
+        .asset-content { padding: 1rem; border-top: 1px solid #4B5563; background-color: #111827; }
+        .asset-content pre { font-size: 0.85rem; background-color: #1F2937; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap; word-wrap: break-word; color: #E5E7EB; }
+        .value { font-weight: bold; color: #4ade80; }
+        .pricing { text-align: right; margin-top: 1rem; }
+        .value-old { text-decoration: line-through; color: #ef4444; }
+        .price-new { font-size: 1.5rem; font-weight: 900; color: #FBBF24; }
+        .guarantee { background-color: #111827; padding: 1rem; border: 1px solid #4B5563; border-radius: 0.5rem; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border: 1px solid #4B5563; text-align: left; }
+        thead { background-color: #374151; }
+        th { font-weight: bold; color: #FBBF24; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Your <span>Hormozi AI</span> Business Growth Kit</h1>
-            <p>A complete, offline-ready package for your ${businessData.businessType}</p>
+            <h1>Hormozi AI<span> Business Plan</span></h1>
+            <p style="color: #9CA3AF; margin-top: 0.5rem;">Your complete offline business playbook for ${escapeHtml(businessData.businessType)}</p>
         </header>
         <main>
-            <div class="grid">
-                <div class="card">
-                    <h3>🚀 Getting Started</h3>
-                    <ul>
-                        <li><a href="./00_START_HERE_Guide.pdf" download><strong>START HERE: Read Me First</strong></a></li>
-                        <li><a href="./01_Core_Plan/Business_Concepts_Guide.pdf" download>Explain The Concepts</a></li>
-                    </ul>
-                </div>
-                <div class="card">
-                    <h3>📝 Core Plan</h3>
-                    <ul>
-                        <li><a href="./01_Core_Plan/Full_Business_Playbook.pdf" download>Full Business Playbook</a></li>
-                        <li><a href="./01_Core_Plan/Business_Scorecard_(KPIs).pdf" download>Business Scorecard (KPIs)</a></li>
-                         <li><a href="./01_Core_Plan/Growth_Experiment_Tracker.pdf" download>Growth Experiment Tracker</a></li>
-                        <li><a href="./01_Core_Plan/Offer_Presentation_Slides.pdf" download>Offer Presentation Slides</a></li>
-                    </ul>
-                </div>
-                 <div class="card">
-                    <h3>💰 Money Models</h3>
-                    <ul>
-                        <li><a href="./02_Money_Models/Your_Money_Making_Plan.pdf" download>Your Money Making Plan</a></li>
-                    </ul>
-                </div>
-                <div class="card">
-                    <h3>📢 Marketing Materials</h3>
-                    <ul>
-                        <li><a href="./03_Marketing_Materials/High-Converting_Landing_Page.pdf" download>High-Converting Landing Page</a></li>
-                        <li><a href="./03_Marketing_Materials/Simple_Offer_Flyer.pdf" download>Simple Offer Flyer</a></li>
-                        <li><a href="./03_Marketing_Materials/Customer_Follow-Up_Note.pdf" download>Customer Follow-Up Note</a></li>
-                    </ul>
-                </div>
-            </div>
-            
-            <h2>📚 Asset Library</h2>
-            <div class="card">
-                ${offerSection(playbook.offer1, "Grand Slam Offer 1")}
-                ${offerSection(playbook.offer2, "Grand Slam Offer 2")}
-                ${offerSection(playbook.downsell.offer, "Downsell 'Hello' Offer")}
-            </div>
+            ${renderDiagnosis(playbook.diagnosis)}
+            ${renderMoneyModelAnalysis(playbook.moneyModelAnalysis)}
+            ${renderMoneyModelMechanisms(playbook.moneyModelMechanisms)}
+            ${renderOffers(playbook)}
+            ${renderDownsell(playbook.downsell)}
+            ${renderProfitPath(playbook.profitPath)}
+            ${renderMarketingModel(playbook.marketingModel)}
+            ${renderMoneyModelFunnel(playbook.moneyModel)}
+            ${renderSalesFunnel(playbook.salesFunnel)}
+            ${renderOperationsPlan(playbook.operationsPlan)}
+            ${renderKpiDashboard(playbook.kpiDashboard)}
+            ${renderAccountabilityTracker(playbook.accountabilityTracker)}
         </main>
-        <footer>
-            <p>Generated by Hormozi AI. Good luck!</p>
-        </footer>
     </div>
 </body>
-</html>`;
-  };
+</html>
+    `;
+  }
 
-  const handleDownloadHtmlPage = () => {
-    if (!currentUser?.playbook || !currentUser?.businessData) {
-        setError("Cannot generate HTML page: Missing playbook or business data.");
-        return;
-    }
+  const handleDownloadHtml = async () => {
+    if (!currentUser?.playbook || !currentUser.businessData || isDownloading) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setError(null);
     try {
-        const htmlContent = generateOfflineIndexHtml(currentUser.playbook, currentUser.businessData);
+        setLoadingText("Preparing your plan's text assets...");
+        const processedPlaybook = await processAllAssets(currentUser.playbook);
+        
+        setLoadingText("Generating your offline HTML file...");
+        const htmlContent = generateOfflineIndexHtml(processedPlaybook, currentUser.businessData);
+        setDownloadProgress(95);
+
         const blob = new Blob([htmlContent], { type: 'text/html' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = "index.html"; // name it index.html so it's easy to replace
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch (err) {
-        setError(err instanceof Error ? `HTML Generation Failed: ${err.message}` : 'An unknown error occurred during HTML generation.');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Hormozi_AI_Business_Plan.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setDownloadProgress(100);
+
+    } catch (e) {
+        setError(e instanceof Error ? `HTML Generation Failed: ${e.message}` : "Failed to generate offline HTML file.");
+        console.error(e);
+    } finally {
+        setIsDownloading(false);
+        setLoadingText('');
     }
   };
 
-  useEffect(() => {
-    if (showAllPdfsForZip && isZipping && processedPlaybookForZip && currentUser?.businessData) {
-      const performZipping = async () => {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          const zip = new JSZip();
-          const { jsPDF } = (window as any).jspdf;
-          const pdfElements = Array.from(document.querySelectorAll('[data-pdf-output]')) as HTMLElement[];
-          let zippingProgress = 50;
-          const progressStep = 48 / pdfElements.length;
 
-          for (let i = 0; i < pdfElements.length; i++) {
-              const el = pdfElements[i];
-              const filePath = el.dataset.pdfPath || `document_${i}.pdf`;
-              
-              const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-              await pdf.html(el, {
-                  autoPaging: 'text',
-                  x: 0,
-                  y: 0,
-                  width: 210, // A4 width
-                  windowWidth: 800,
-                  margin: 0,
-              });
-              const blob = pdf.output('blob');
-              zip.file(filePath, blob);
-              zippingProgress += progressStep;
-              setZipProgress(zippingProgress);
-          }
-          
-          const offlineIndexHtml = generateOfflineIndexHtml(processedPlaybookForZip, currentUser.businessData);
-          zip.file('index.html', offlineIndexHtml);
-          setZipProgress(99);
-
-          zip.generateAsync({ type: "blob" })
-              .then(function(content) {
-                  setZipProgress(100);
-                  const link = document.createElement('a');
-                  link.href = URL.createObjectURL(content);
-                  link.download = "Hormozi_AI_Business_Plan.zip";
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  
-                  setShowAllPdfsForZip(false);
-                  setProcessedPlaybookForZip(null);
-                  setIsZipping(false);
-              });
-      };
-      performZipping();
-    }
-  }, [showAllPdfsForZip, isZipping, processedPlaybookForZip, currentUser?.businessData]);
-
-  useEffect(() => {
-    if (currentUser?.playbook && chatHistory.length === 0) {
-        setChatHistory([{
-            role: 'model',
-            content: "I've created your plan. Now, let's make it perfect. Ask me to change a section, give you new ideas, or explain a concept. How can I help?"
-        }]);
-    }
-  }, [currentUser?.playbook, chatHistory.length]);
-
-  const handleSendMessage = async (message: string) => {
-      if (!message.trim() || isChatLoading || !currentUser?.businessData || !currentUser?.playbook) return;
-
-      const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
-      setChatHistory(newHistory);
-      setIsChatLoading(true);
-
-      try {
-          const stream = await generateChatResponseStream(currentUser.businessData, currentUser.playbook, newHistory);
-          
-          let aiResponse = '';
-          setChatHistory(prev => [...prev, { role: 'model', content: '' }]);
-
-          for await (const chunk of stream) {
-              aiResponse += chunk.text;
-              setChatHistory(prev => {
-                  const updatedHistory = [...prev];
-                  updatedHistory[updatedHistory.length - 1].content = aiResponse;
-                  return updatedHistory;
-              });
-          }
-
-      } catch (err) {
-          const errorMessage = err instanceof Error ? `Chat Error: ${err.message}` : 'An unknown chat error occurred.';
-          setChatHistory(prev => [...prev, { role: 'model', content: `Sorry, I ran into a problem: ${errorMessage}` }]);
-      } finally {
-          setIsChatLoading(false);
-      }
-  };
-
-  useEffect(() => {
-    if (!isGeneratingPdf || !currentUser?.playbook) return;
-    if (!pdfType && !assetForPdf && !assetBundleForPdf) return;
-
-    const generatePdf = async () => {
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      setPdfProgress(95);
-
-      let sourceElement: HTMLDivElement | null = null;
-      let fileName: string = '';
-
-      if (assetForPdf) {
-          sourceElement = pdfAssetRef.current;
-          fileName = assetForPdf.name ? `${assetForPdf.name.replace(/ /g, '_')}` : 'Hormozi_AI_Asset';
-      } else if (assetBundleForPdf) {
-          sourceElement = pdfSingleRenderRef.current;
-          fileName = `Hormozi_AI_Assets_${assetBundleForPdf.name.replace(/ /g, '_')}`;
-      } else if (pdfType) {
-          sourceElement = pdfSingleRenderRef.current;
-          fileName = `Hormozi_AI_${pdfType.replace(/ /g, '_')}`;
-      }
-
-      if (!sourceElement) {
-        setError('Could not find content for PDF.');
-        setIsGeneratingPdf(false);
-        setPdfType(null); setAssetForPdf(null); setGeneratingAsset(null); setAssetBundleForPdf(null); setGeneratingAssetBundleFor(null);
-        return;
-      }
-
-      const { jsPDF } = (window as any).jspdf;
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-      
-      try {
-        await pdf.html(sourceElement, {
-          callback: (doc) => {
-            setPdfProgress(100);
-            doc.save(`${fileName}.pdf`);
-            setIsGeneratingPdf(false);
-            setPdfType(null); setAssetForPdf(null); setGeneratingAsset(null); setAssetBundleForPdf(null); setGeneratingAssetBundleFor(null);
-          },
-          autoPaging: 'text',
-          x: 0, y: 0,
-          width: 210, windowWidth: 800, margin: 0
-        });
-      } catch (err) {
-        setError(err instanceof Error ? `PDF Generation Failed: ${err.message}` : 'An unknown error occurred during PDF generation.');
-        setIsGeneratingPdf(false);
-        setPdfType(null); setAssetForPdf(null); setGeneratingAsset(null); setAssetBundleForPdf(null); setGeneratingAssetBundleFor(null);
-      }
-    };
-    
-    generatePdf();
-  }, [pdfType, assetForPdf, assetBundleForPdf, isGeneratingPdf, currentUser?.playbook]);
-
-  const downloadOptions = currentUser?.playbook ? [
-    { label: 'The Full Plan (PDF)', onClick: () => prepareAndDownloadPdf('full') },
-    { label: 'Explain The Concepts (PDF)', onClick: () => prepareAndDownloadPdf('concepts-guide') },
-    { label: 'Your Business Scorecard (KPIs)', onClick: () => prepareAndDownloadPdf('kpi-dashboard') },
-    { label: 'Your Growth Tracker (PDF)', onClick: () => prepareAndDownloadPdf('accountability-tracker') },
-    { label: 'A High-Converting Web Page', onClick: () => prepareAndDownloadPdf('landing-page') },
-    { label: 'A Presentation For Your Offer', onClick: () => prepareAndDownloadPdf('offer-presentation') },
-    { label: 'A Simple Offer Flyer', onClick: () => prepareAndDownloadPdf('downsell-pamphlet') },
-    { label: 'A Follow-Up Note', onClick: () => prepareAndDownloadPdf('tripwire-followup') },
-    { label: 'Your Money-Making Plan', onClick: () => prepareAndDownloadPdf('cfa-model') },
-    { label: 'Offline Dashboard (HTML)', onClick: handleDownloadHtmlPage },
-  ] : [];
-
-  const anyFileGenerationInProgress = isGeneratingPdf || isZipping;
-
-  const renderContent = () => {
-    if (authLoading) {
-      return <div className="text-center p-8">Loading...</div>;
-    }
-    
-    if (!currentUser) {
-      if (authView === 'login') {
-        return <Auth onLogin={handleLogin} onSwitchToSignup={() => setAuthView('signup')} setError={setError} />;
-      }
-      return <Step1Form onSubmit={handleSignupAndGenerate} onBackToLogin={() => setAuthView('login')} />;
-    }
-
-    if (isLoading) {
-      return <ProgressBar progress={loadingProgress} loadingText={loadingText} />;
-    }
-
-    if (currentUser.playbook && currentUser.businessData) {
-      return (
-        <div className="space-y-12">
-          <FullPlaybook 
-            playbook={currentUser.playbook} 
-            onDownloadAsset={prepareAndDownloadAssetPdf}
-            isAnyPdfGenerating={anyFileGenerationInProgress}
-            generatingAsset={generatingAsset}
-            onDownloadAllAssets={prepareAndDownloadAssetBundlePdf}
-            generatingAssetBundleFor={generatingAssetBundleFor}
-            chatHistory={chatHistory}
-            isChatLoading={isChatLoading}
-            onSendMessage={handleSendMessage}
-            pdfProgress={pdfProgress}
-            onPreviewAsset={handlePreviewAsset}
-          />
-          <div id="playbook-actions" className="text-center mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-             <button 
-              onClick={handleLogout}
-              className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-            >
-              Logout
-            </button>
-             <button 
-              onClick={handleStartNew}
-              disabled={anyFileGenerationInProgress}
-              className="w-full sm:w-auto px-6 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-300 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Start New Plan
-            </button>
-             <button 
-              onClick={handleDownloadAll}
-              disabled={anyFileGenerationInProgress}
-              className="w-full sm:w-auto px-8 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
-              style={{minWidth: '180px', minHeight: '52px'}}
-            >
-              {isZipping ? <CircularProgress progress={zipProgress} /> : 'Download All (ZIP)'}
-            </button>
-            <DropdownButton
-              label="Download Files"
-              options={downloadOptions}
-              isLoading={(isGeneratingPdf && !!pdfType)}
-              progress={pdfProgress}
-            />
-          </div>
+  if (authLoading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  if (!currentUser) {
+    return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl">
+              {authView === 'login' && <Auth onLogin={handleLogin} onSwitchToSignup={() => { setAuthView('signup'); setError(null); }} setError={setError} />}
+              {authView === 'signup' && <Step1Form onSubmit={handleSignupAndGenerate} onBackToLogin={() => { setAuthView('login'); setError(null); }} isSignupMode={true} />}
+              {error && <p className="mt-4 text-center text-red-400 bg-red-900/50 p-3 rounded-md">{error}</p>}
+            </div>
         </div>
-      );
-    }
-    
-    // This case happens if a user is logged in but hasn't created a plan yet.
-    return <Step1Form onSubmit={handleSignupAndGenerate} onBackToLogin={() => setAuthView('login')} isSignupMode={false} />;
-  };
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="w-full max-w-md p-4">
+          <ProgressBar progress={loadingProgress} loadingText={loadingText} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser.playbook) {
+    return (
+       <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl">
+              <Step1Form onSubmit={(data) => handleSignupAndGenerate(data, {username: currentUser.username, password: ''})} onBackToLogin={() => {}} isSignupMode={false} />
+              {error && <p className="mt-4 text-center text-red-40a0">{error}</p>}
+          </div>
+       </div>
+    );
+  }
 
   return (
-    <>
-      {assetToPreview && assetToPreview.asset && (
+    <div className="min-h-screen">
+      {currentUser && currentUser.playbook && (
+        <div className="p-4 md:p-8 space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter text-center sm:text-left">Your <span className="text-yellow-400">Hormozi AI</span> Business Plan</h1>
+              <div className="flex gap-2">
+                 <button
+                    onClick={handleDownloadHtml}
+                    disabled={isDownloading}
+                    className="inline-flex justify-center items-center rounded-lg border border-gray-600 shadow-sm px-6 py-3 bg-gray-600 text-base font-bold text-white hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{minHeight: '52px', minWidth: '220px'}}
+                 >
+                    {isDownloading ? <CircularProgress progress={downloadProgress} /> : 'Download Offline Plan'}
+                 </button>
+                 <button onClick={handleStartNew} className="px-4 py-2 bg-gray-700 text-gray-300 font-semibold rounded-md hover:bg-gray-600 transition-colors text-sm">Start New Plan</button>
+                 <button onClick={handleLogout} className="px-4 py-2 bg-red-800 text-white font-semibold rounded-md hover:bg-red-700 transition-colors text-sm">Logout</button>
+              </div>
+            </div>
+          {error && <p className="text-center text-red-400 bg-red-900/50 p-3 rounded-md">{error}</p>}
+
+          <FullPlaybook 
+            playbook={currentUser.playbook}
+            onPreviewAsset={handlePreviewAsset}
+            chatHistory={chatHistory}
+            isChatLoading={isChatLoading}
+            onSendMessage={async (message) => {
+                if(!currentUser.businessData || !currentUser.playbook) return;
+                
+                const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
+                setChatHistory(newHistory);
+                setIsChatLoading(true);
+
+                try {
+                    const stream = await generateChatResponseStream(currentUser.businessData, currentUser.playbook, newHistory);
+                    let fullResponse = '';
+                    setChatHistory(prev => [...prev, { role: 'model', content: '' }]);
+                    for await (const chunk of stream) {
+                        fullResponse += chunk.text;
+                        setChatHistory(prev => {
+                            const updatedHistory = [...prev];
+                            updatedHistory[updatedHistory.length - 1] = { role: 'model', content: fullResponse };
+                            return updatedHistory;
+                        });
+                    }
+                } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : "An error occurred with the AI chat.";
+                    setError(errorMessage);
+                    setChatHistory(prev => prev.slice(0, -1));
+                } finally {
+                    setIsChatLoading(false);
+                }
+            }}
+          />
+        </div>
+      )}
+      
+      {assetToPreview && (
         <OfferPreviewModal 
-            asset={assetToPreview.asset} 
-            onClose={() => setAssetToPreview(null)} 
+            asset={assetToPreview.asset!} 
+            onClose={() => setAssetToPreview(null)}
         />
       )}
-      <div className="flex flex-col items-center p-4 sm:p-6 md:p-8 min-h-screen">
-        <header className="w-full max-w-5xl text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter">
-            The <span className="text-yellow-400">Hormozi</span> AI
-          </h1>
-          <p className="text-gray-400 mt-2">Your Simple Path to Business Growth.</p>
-           {currentUser && <p className="text-sm text-gray-500 mt-1">Logged in as: {currentUser.username}</p>}
-        </header>
-        
-        <main className="w-full max-w-5xl flex-grow">
-            {error && !isLoading && (
-              <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg text-center mb-4">
-                  <p className="font-bold">Something went wrong.</p>
-                  <p className="mt-2 text-sm">{error}</p>
-                  <button 
-                    onClick={() => setError(null)}
-                    className="mt-4 px-4 py-1 bg-yellow-400 text-gray-900 font-bold rounded-md hover:bg-yellow-300 transition-colors text-sm"
-                  >
-                    Close
-                  </button>
-              </div>
-            )}
-            {renderContent()}
-        </main>
-        
-        <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
-            {currentUser?.playbook && currentUser?.businessData && (
-              <>
-                <div ref={pdfSingleRenderRef} className="w-[800px]">
-                    <AllPdfs playbook={currentUser.playbook} businessData={currentUser.businessData} type={pdfType} assetBundle={assetBundleForPdf} />
-                </div>
-                {assetForPdf && (
-                  <div ref={pdfAssetRef} className="w-[800px]">
-                     <AllPdfs playbook={currentUser.playbook} businessData={currentUser.businessData} type="single-asset" singleAsset={assetForPdf} />
-                  </div>
-                )}
-                {showAllPdfsForZip && processedPlaybookForZip && (
-                  <AllPdfs playbook={processedPlaybookForZip} businessData={currentUser.businessData} type="all" />
-                )}
-              </>
-            )}
-        </div>
-
-        <footer className="w-full max-w-5xl text-center mt-12 text-gray-500 text-sm">
-          <p>This AI provides ideas from Alex Hormozi's books for education. Please talk to a professional for major financial or legal decisions.</p>
-        </footer>
-      </div>
-    </>
+    </div>
   );
 };
 
