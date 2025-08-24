@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { BusinessData } from '../types';
 import Card from './common/Card';
 import { businessExamples } from '../data/businessExamples';
@@ -6,6 +7,8 @@ import { generateFieldSuggestion } from '../services/hormoziAiService';
 
 interface Step1FormProps {
   onSubmit: (data: BusinessData) => void;
+  initialData?: BusinessData | null;
+  submitButtonText?: string;
 }
 
 const currencies = [
@@ -131,34 +134,22 @@ const FormSectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }
     <h3 className="text-lg font-bold text-yellow-400 border-b border-gray-600 pb-2 mt-8 mb-6">{children}</h3>
 );
 
-const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
+const Step1Form: React.FC<Step1FormProps> = ({ onSubmit, initialData, submitButtonText }) => {
   const [formData, setFormData] = useState<BusinessData>({
-    country: '',
-    currency: '',
-    businessType: '',
-    location: '',
-    monthlyRevenue: '',
-    employees: '',
-    marketingMethods: '',
-    biggestChallenge: '',
-    coreOffer: '',
-    targetClient: '',
-    offerTimeline: '',
-    hasSalesTeam: '',
-    monthlyAdSpend: '',
-    profitGoal: '',
-    hasCertifications: '',
-    hasTestimonials: '',
-    physicalCapacity: '',
-    ancillaryProducts: '',
-    perceivedMaxPrice: '',
-    dailyTimeCommitment: '',
-    businessStage: 'existing',
-    fundingStatus: undefined,
+    country: '', currency: '', businessType: '', location: '', monthlyRevenue: '', employees: '', marketingMethods: '',
+    biggestChallenge: '', coreOffer: '', targetClient: '', offerTimeline: 'one_time', hasSalesTeam: 'no',
+    monthlyAdSpend: '0', profitGoal: '', hasCertifications: 'no', hasTestimonials: 'no', physicalCapacity: '',
+    ancillaryProducts: '', perceivedMaxPrice: '', dailyTimeCommitment: '', businessStage: 'existing', fundingStatus: undefined,
   });
 
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [generatingField, setGeneratingField] = useState<keyof BusinessData | null>(null);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -222,32 +213,46 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
     ? "Get ideas for a new venture, or describe your own."
     : "Describe your current business, or get examples to inspire you.";
 
+  const renderHeader = () => {
+    if (initialData) {
+        return (
+            <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-white">Review Your Business Details</h2>
+                <p className="text-gray-400 mt-2">Our AI analyzed your profile to get this information. Please review it and make any corrections before we build your full plan.</p>
+            </div>
+        );
+    }
+    return (
+        <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-white">Let's Create Your Plan</h2>
+            <p className="text-gray-400 mt-2">{subheaderText}</p>
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+                <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-gray-200 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition text-sm"
+                >
+                    {businessCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+                <button
+                    type="button"
+                    onClick={handleAutofill}
+                    className="px-4 py-2 bg-gray-600 text-yellow-300 font-semibold rounded-md hover:bg-gray-500 transition-colors text-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 3a1 1 0 011 1v1.334l1.322-1.323a1 1 0 111.414 1.414l-1.403 1.404A5.001 5.001 0 0115 10a5 5 0 01-5 5v2a1 1 0 11-2 0v-2a5 5 0 01-5-5c0-1.606.767-3.033 1.95-3.95l-1.405-1.404a1 1 0 111.414-1.414L8 5.334V4a1 1 0 011-1zm-4.322 7.323a3 3 0 106.644 0 3 3 0 00-6.644 0z" />
+                    <path d="M10 4a1 1 0 011 1v.01a1 1 0 11-2 0V5a1 1 0 011-1z" />
+                  </svg>
+                  Shuffle & Autofill
+                </button>
+            </div>
+        </div>
+    );
+  };
+
   return (
     <Card>
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Let's Create Your Plan</h2>
-        <p className="text-gray-400 mt-2">{subheaderText}</p>
-        <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
-            <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-gray-200 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition text-sm"
-            >
-                {businessCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-            <button
-                type="button"
-                onClick={handleAutofill}
-                className="px-4 py-2 bg-gray-600 text-yellow-300 font-semibold rounded-md hover:bg-gray-500 transition-colors text-sm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10 3a1 1 0 011 1v1.334l1.322-1.323a1 1 0 111.414 1.414l-1.403 1.404A5.001 5.001 0 0115 10a5 5 0 01-5 5v2a1 1 0 11-2 0v-2a5 5 0 01-5-5c0-1.606.767-3.033 1.95-3.95l-1.405-1.404a1 1 0 111.414-1.414L8 5.334V4a1 1 0 011-1zm-4.322 7.323a3 3 0 106.644 0 3 3 0 00-6.644 0z" />
-                <path d="M10 4a1 1 0 011 1v.01a1 1 0 11-2 0V5a1 1 0 011-1z" />
-              </svg>
-              Shuffle & Autofill
-            </button>
-        </div>
-      </div>
+      {renderHeader()}
       <form onSubmit={handleSubmit} className="space-y-6">
         <FormSectionHeader>1. Your Situation</FormSectionHeader>
         <div className="grid md:grid-cols-2 gap-6 items-start">
@@ -330,7 +335,7 @@ const Step1Form: React.FC<Step1FormProps> = ({ onSubmit }) => {
                 type="submit" 
                 className="w-full bg-yellow-400 text-gray-900 font-bold py-3 px-4 rounded-lg hover:bg-yellow-300 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400"
             >
-                Make My Plan!
+                {submitButtonText || 'Make My Plan!'}
             </button>
         </div>
       </form>

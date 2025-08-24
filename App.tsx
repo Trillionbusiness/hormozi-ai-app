@@ -1,12 +1,12 @@
 
-import React, { useState, useCallback } from 'react';
-import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage } from './types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedOffer, ChatMessage, GeneratedDiagnosis } from './types';
 import { 
     generateDiagnosis, generateMoneyModelAnalysis, generateMoneyModel, 
     generateMoneyModelMechanisms, generateOperationsPlan, generateOffer1, 
     generateOffer2, generateDownsell, generateProfitPath, 
     generateMarketingModel, generateSalesFunnel, generateKpiDashboard,
-    generateAccountabilityTracker, generateAssetContent, generateChatResponseStream 
+    generateAccountabilityTracker, generateAssetContent, generateBusinessDataFromInstagram 
 } from './services/hormoziAiService';
 
 import Step1Form from './components/Step1Form';
@@ -19,17 +19,21 @@ import ReactDOM from 'react-dom/client';
 import AllHtml from './components/html/AllHtml';
 import CircularProgress from './components/common/CircularProgress';
 import Card from './components/common/Card';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import JSZip from 'jszip';
+import MiniReportView from './components/MiniReportView';
+import InstagramInputForm from './components/InstagramInputForm';
 
 
 const App: React.FC = () => {
   const [businessData, setBusinessData] = useState<BusinessData | null>(null);
-  const [playbook, setPlaybook] = useState<GeneratedPlaybook | null>(null);
+  const [playbook, setPlaybook] = useState<Partial<GeneratedPlaybook> | null>(null);
+  const [generationStage, setGenerationStage] = useState<'instagramInput' | 'reviewData' | 'miniReport' | 'fullPlan'>('instagramInput');
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('Starting...');
-  
-  const [pdfGenConfig, setPdfGenConfig] = useState<{ type: string; assetBundle?: GeneratedOffer | null; singleAsset?: NonNullable<OfferStackItem['asset']> | null; } | null>(null);
 
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -40,29 +44,69 @@ const App: React.FC = () => {
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
   const [assetToPreview, setAssetToPreview] = useState<OfferStackItem | null>(null);
 
-  const handleGeneratePlan = useCallback(async (submittedBusinessData: BusinessData) => {
-    setBusinessData(submittedBusinessData);
+  const [triggerFullPlan, setTriggerFullPlan] = useState(false);
+
+  const handleGenerateMiniReportFromInstagram = useCallback(async (url: string) => {
     setIsLoading(true);
     setLoadingProgress(0);
     setError(null);
     setPlaybook(null);
+    setBusinessData(null);
 
     try {
-        const fullPlaybook: Partial<GeneratedPlaybook> = {};
+        setLoadingText("Analyzing your Instagram profile...");
+        setLoadingProgress(25);
+        const dataFromAI = await generateBusinessDataFromInstagram(url);
+        setBusinessData(dataFromAI);
+        
+        setLoadingText("Generating your free report...");
+        setLoadingProgress(75);
+        const diagnosis = await generateDiagnosis(dataFromAI);
+        
+        await new Promise(res => setTimeout(res, 500));
+        setLoadingProgress(100);
+        setLoadingText("Your free report is ready!");
+        
+        setPlaybook({ diagnosis });
+        setGenerationStage('miniReport');
+
+    } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred. Please check the URL and try again.');
+        console.error(err);
+        setGenerationStage('instagramInput'); // Reset on error
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);
+
+  const handleGenerateFullPlan = useCallback(async () => {
+    if (!businessData || !playbook?.diagnosis) {
+        setError("Missing business data or initial diagnosis. Please start over.");
+        setGenerationStage('instagramInput');
+        return;
+    }
+    
+    setIsLoading(true);
+    setLoadingProgress(0);
+    setError(null);
+    setGenerationStage('fullPlan'); // Move to full plan view immediately to show progress bar
+    
+    try {
+        const fullPlaybook: Partial<GeneratedPlaybook> = { diagnosis: playbook.diagnosis };
+        
         const steps = [
-            { name: "Analyzing Your Business...", fn: () => generateDiagnosis(submittedBusinessData), key: 'diagnosis' },
-            { name: "Building Your Money Plan...", fn: () => generateMoneyModelAnalysis(submittedBusinessData), key: 'moneyModelAnalysis' },
-            { name: "Creating Your Money Toolkit...", fn: () => generateMoneyModelMechanisms(submittedBusinessData), key: 'moneyModelMechanisms' },
-            { name: "Designing Your Money Funnel...", fn: () => generateMoneyModel(submittedBusinessData), key: 'moneyModel' },
-            { name: "Crafting Your Best Offers...", fn: () => generateOffer1(submittedBusinessData), key: 'offer1' },
-            { name: "Creating a Second Offer...", fn: () => generateOffer2(submittedBusinessData), key: 'offer2' },
-            { name: "Making a 'Hello' Offer...", fn: () => generateDownsell(submittedBusinessData), key: 'downsell' },
-            { name: "Finding Your Customer Path...", fn: () => generateMarketingModel(submittedBusinessData), key: 'marketingModel' },
-            { name: "Building Your Sales Funnel...", fn: () => generateSalesFunnel(submittedBusinessData), key: 'salesFunnel' },
-            { name: "Designing Your Profit Steps...", fn: () => generateProfitPath(submittedBusinessData), key: 'profitPath' },
-            { name: "Planning Your Daily Actions...", fn: () => generateOperationsPlan(submittedBusinessData), key: 'operationsPlan' },
-            { name: "Setting Up Your Scorecard...", fn: () => generateKpiDashboard(submittedBusinessData), key: 'kpiDashboard' },
-            { name: "Creating Your Growth Tracker...", fn: () => generateAccountabilityTracker(submittedBusinessData), key: 'accountabilityTracker' },
+            { name: "Building Your Money Plan...", fn: () => generateMoneyModelAnalysis(businessData), key: 'moneyModelAnalysis' },
+            { name: "Creating Your Money Toolkit...", fn: () => generateMoneyModelMechanisms(businessData), key: 'moneyModelMechanisms' },
+            { name: "Designing Your Money Funnel...", fn: () => generateMoneyModel(businessData), key: 'moneyModel' },
+            { name: "Crafting Your Best Offers...", fn: () => generateOffer1(businessData), key: 'offer1' },
+            { name: "Creating a Second Offer...", fn: () => generateOffer2(businessData), key: 'offer2' },
+            { name: "Making a 'Hello' Offer...", fn: () => generateDownsell(businessData), key: 'downsell' },
+            { name: "Finding Your Customer Path...", fn: () => generateMarketingModel(businessData), key: 'marketingModel' },
+            { name: "Building Your Sales Funnel...", fn: () => generateSalesFunnel(businessData), key: 'salesFunnel' },
+            { name: "Designing Your Profit Steps...", fn: () => generateProfitPath(businessData), key: 'profitPath' },
+            { name: "Planning Your Daily Actions...", fn: () => generateOperationsPlan(businessData), key: 'operationsPlan' },
+            { name: "Setting Up Your Scorecard...", fn: () => generateKpiDashboard(businessData), key: 'kpiDashboard' },
+            { name: "Creating Your Growth Tracker...", fn: () => generateAccountabilityTracker(businessData), key: 'accountabilityTracker' },
         ];
         
         const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -71,6 +115,7 @@ const App: React.FC = () => {
             setLoadingText(steps[i].name);
             // @ts-ignore
             fullPlaybook[steps[i].key] = await steps[i].fn();
+            setPlaybook(prev => ({...prev, ...fullPlaybook})); // Update playbook state progressively
             setLoadingProgress(((i + 1) / steps.length) * 100);
             if (i < steps.length - 1) await delay(2000);
         }
@@ -82,20 +127,37 @@ const App: React.FC = () => {
     } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
         console.error(err);
-        setBusinessData(null);
     } finally {
         setIsLoading(false);
     }
-  }, []);
+  }, [businessData, playbook?.diagnosis]);
 
+  // Effect to trigger full plan generation after data confirmation
+  useEffect(() => {
+    if (triggerFullPlan) {
+      handleGenerateFullPlan();
+      setTriggerFullPlan(false); // Reset trigger
+    }
+  }, [triggerFullPlan, handleGenerateFullPlan]);
+  
+  const handleProceedToFullPlan = () => {
+    setGenerationStage('reviewData');
+  };
+
+  const handleConfirmAndGenerateFullPlan = (confirmedBusinessData: BusinessData) => {
+    setBusinessData(confirmedBusinessData);
+    setTriggerFullPlan(true);
+  };
+  
   const handleStartOver = () => {
-    const confirmed = window.confirm("Are you sure you want to start a new plan? Your current plan will be lost.");
+    const confirmed = window.confirm("Are you sure you want to start a new plan? Your current progress will be lost.");
     if (confirmed) {
         setPlaybook(null);
         setBusinessData(null);
         setError(null);
         setIsLoading(false);
         setChatHistory([]);
+        setGenerationStage('instagramInput');
     }
   };
   
@@ -121,7 +183,7 @@ const App: React.FC = () => {
                 await delay(2000);
             }
             assetsProcessed++;
-            setDownloadProgress((assetsProcessed / totalAssets) * 80);
+            setDownloadProgress((assetsProcessed / totalAssets) * 50);
             processedStack.push({ ...item, asset: { ...item.asset, content: newContent }});
         }
         return { ...offer, stack: processedStack };
@@ -151,9 +213,8 @@ const App: React.FC = () => {
             const newContent = await generateAssetContent(item, businessData);
             const updatedItem = { ...item, asset: { ...item.asset, content: newContent } };
             
-            // Update the main playbook state so the content is persisted
             if (playbook) {
-                const newPlaybook = JSON.parse(JSON.stringify(playbook)); // Deep copy
+                const newPlaybook = JSON.parse(JSON.stringify(playbook));
                 [newPlaybook.offer1, newPlaybook.offer2, newPlaybook.downsell.offer].forEach(offer => {
                     const stackItem = offer.stack.find((si: OfferStackItem) => si.solution === item.solution);
                     if (stackItem) {
@@ -174,16 +235,102 @@ const App: React.FC = () => {
         setGeneratingAsset(null);
     }
   }, [businessData, playbook]);
+  
+  const handleDownloadPdf = async (config: { type: string; assetBundle?: GeneratedOffer | null; singleAsset?: NonNullable<OfferStackItem['asset']> | null; }) => {
+    if (!playbook || !businessData) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+
+    const sanitizeFilename = (name: string) => name.replace(/[\\/:*?"<>|]/g, '').replace(/ /g, '_');
+
+    const filenames: {[key: string]: string} = {
+        'full': 'Full_Business_Playbook.pdf',
+        'kpi-dashboard': 'Business_Scorecard.pdf',
+        'accountability-tracker': 'Growth_Tracker.pdf',
+        'cfa-model': 'Money_Making_Plan.pdf',
+        'offer-presentation': 'Offer_Presentation.pdf',
+        'concepts-guide': 'Concepts_Guide.pdf',
+        'landing-page': 'Landing_Page_Copy.pdf',
+        'downsell-pamphlet': 'Offer_Flyer.pdf',
+        'tripwire-followup': 'Customer_Follow-Up.pdf',
+        'mini-clarity-report': 'AI_Mini_Clarity_Report.pdf',
+        'assetBundle': sanitizeFilename(`${config.assetBundle?.name}_Asset_Bundle.pdf`),
+        'singleAsset': sanitizeFilename(`${config.singleAsset?.name}.pdf`),
+    };
+
+    const filename = filenames[config.type] || 'Hormozi_AI_Plan.pdf';
+
+    try {
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '0';
+        container.style.top = '0';
+        container.style.zIndex = '-1';
+        document.body.appendChild(container);
+        
+        const root = ReactDOM.createRoot(container);
+        root.render(<AllPdfs playbook={playbook as GeneratedPlaybook} businessData={businessData} {...config} />);
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setDownloadProgress(25);
+
+        const content = container.querySelector('div');
+        if (!content) throw new Error("Could not find rendered content for PDF generation.");
+
+        const canvas = await html2canvas(content, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            windowWidth: content.scrollWidth,
+            windowHeight: content.scrollHeight,
+        });
+        setDownloadProgress(75);
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = pdfWidth / canvasWidth;
+        const imgHeight = canvasHeight * ratio;
+        let heightLeft = imgHeight;
+        let position = 0;
+        
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+            position -= pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+        }
+
+        pdf.save(filename);
+        setDownloadProgress(100);
+
+        root.unmount();
+        document.body.removeChild(container);
+        
+    } catch (err) {
+        setError(err instanceof Error ? `PDF Download Failed: ${err.message}` : 'An unknown error occurred during PDF download.');
+        console.error(err);
+    } finally {
+        setIsDownloading(false);
+    }
+  };
 
   const handleDownloadHtml = async () => {
     if (!playbook || !businessData) return;
     setIsDownloading(true);
     setDownloadProgress(0);
     try {
-        const processedPlaybook = await processAllAssets(playbook);
+        const processedPlaybook = await processAllAssets(playbook as GeneratedPlaybook);
         setDownloadProgress(85);
         
-        // Render the component to a string
         const tempDiv = document.createElement('div');
         const tempRoot = ReactDOM.createRoot(tempDiv);
         
@@ -194,7 +341,6 @@ const App: React.FC = () => {
                 const fullHtml = generateOfflineIndexHtml(content, processedPlaybook, businessData);
                 setDownloadProgress(95);
 
-                // Trigger download
                 const blob = new Blob([fullHtml], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -208,7 +354,7 @@ const App: React.FC = () => {
                 setDownloadProgress(100);
                 tempRoot.unmount();
                 resolve();
-            }, 1000); // Allow time for render
+            }, 1000);
         });
 
         await htmlPromise;
@@ -219,12 +365,89 @@ const App: React.FC = () => {
         setIsDownloading(false);
     }
   };
+  
+  const handleDownloadZip = async () => {
+    if (!playbook || !businessData) return;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    try {
+        const processedPlaybook = await processAllAssets(playbook as GeneratedPlaybook);
+        setDownloadProgress(50);
+
+        const zip = new JSZip();
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.left = '-9999px';
+        container.style.top = '-9999px';
+        document.body.appendChild(container);
+        
+        const root = ReactDOM.createRoot(container);
+        
+        root.render(<AllPdfs playbook={processedPlaybook} businessData={businessData} type="all" />);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const docElements = container.querySelectorAll<HTMLElement>('[data-pdf-output]');
+        const totalDocs = docElements.length;
+
+        for (let i = 0; i < totalDocs; i++) {
+            const element = docElements[i];
+            const content = element.firstChild as HTMLElement;
+            if (!content) continue;
+
+            const path = element.dataset.pdfPath || `document_${i + 1}.pdf`;
+
+            const canvas = await html2canvas(content, { scale: 2, useCORS: true, logging: false, windowWidth: content.scrollWidth, windowHeight: content.scrollHeight });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const ratio = pdfWidth / canvasWidth;
+            const imgHeight = canvasHeight * ratio;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            while (heightLeft > 0) {
+                position -= pdfHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+            
+            const pdfBlob = pdf.output('blob');
+            zip.file(path, pdfBlob);
+
+            setDownloadProgress(50 + ((i + 1) / totalDocs) * 50);
+        }
+        
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Hormozi_AI_Business_Plan_Kit.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        root.unmount();
+        document.body.removeChild(container);
+
+    } catch (err) {
+        setError(err instanceof Error ? `ZIP Download Failed: ${err.message}` : 'An unknown error occurred during ZIP download.');
+    } finally {
+        setIsDownloading(false);
+    }
+  };
 
   const generateOfflineIndexHtml = (reactHtml: string, playbookData: GeneratedPlaybook, businessInfo: BusinessData): string => {
     const escapeHtml = (unsafe: string | undefined | null) => (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     
-    // The main react-rendered content is passed in as `reactHtml`.
-    // We just need to wrap it in a full HTML document structure with styles.
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -237,14 +460,12 @@ const App: React.FC = () => {
         body { font-family: 'Inter', sans-serif; background-color: #111827; color: #E5E7EB; margin: 0; padding: 2rem; line-height: 1.6; }
         .container { max-width: 900px; margin: auto; }
         h1, h2, h3, h4, h5, h6 { color: white; }
-        /* Playbook Step Styles */
         .playbook-step { margin-bottom: 2rem; }
         .playbook-step .relative { padding-left: 4rem; }
         .playbook-step .absolute { position: absolute; left: 0; top: 0; display: flex; align-items: center; justify-content: center; width: 3rem; height: 3rem; background-color: #FBBF24; color: #111827; font-weight: 900; font-size: 1.5rem; border-radius: 9999px; }
         .playbook-step h2 { font-size: 2rem; font-weight: 900; color: white; }
         .playbook-step p { color: #9CA3AF; }
         .playbook-step-content { margin-top: 2rem; }
-        /* Card Styles */
         .bg-gray-800 { background-color: #1F2937; }
         .border-gray-700 { border-color: #374151; }
         .rounded-xl { border-radius: 0.75rem; }
@@ -256,10 +477,8 @@ const App: React.FC = () => {
         .pb-2 { padding-bottom: 0.5rem; }
         .mb-6 { margin-bottom: 1.5rem; }
         .font-black { font-weight: 900; }
-        /* Accordion */
         .strategy-toggle-icon { display: none; }
         .strategy-content { max-height: unset !important; }
-        /* Other component styles */
         .text-white { color: #fff; }
         .text-gray-400 { color: #9CA3AF; }
         .text-gray-200 { color: #E5E7EB; }
@@ -321,95 +540,101 @@ const App: React.FC = () => {
   };
 
   const downloadOptions = [
-    { label: 'Full Playbook (PDF)', onClick: () => setPdfGenConfig({ type: 'full' }) },
-    { label: 'Business Scorecard (KPIs)', onClick: () => setPdfGenConfig({ type: 'kpi-dashboard' }) },
-    { label: 'Growth Tracker', onClick: () => setPdfGenConfig({ type: 'accountability-tracker' }) },
-    { label: 'Money Making Plan (CFA)', onClick: () => setPdfGenConfig({ type: 'cfa-model' }) },
-    { label: 'Offer Presentation', onClick: () => setPdfGenConfig({ type: 'offer-presentation' }) },
-    { label: 'Concepts Guide', onClick: () => setPdfGenConfig({ type: 'concepts-guide' }) },
-    { label: 'Marketing: Landing Page', onClick: () => setPdfGenConfig({ type: 'landing-page' }) },
-    { label: 'Marketing: Offer Flyer', onClick: () => setPdfGenConfig({ type: 'downsell-pamphlet' }) },
-    { label: 'Marketing: Customer Follow-Up', onClick: () => setPdfGenConfig({ type: 'tripwire-followup' }) },
+    { label: 'Full Playbook (PDF)', onClick: () => handleDownloadPdf({ type: 'full' }) },
+    { label: 'AI Mini Clarity Report', onClick: () => handleDownloadPdf({ type: 'mini-clarity-report' }) },
+    { label: 'Business Scorecard (KPIs)', onClick: () => handleDownloadPdf({ type: 'kpi-dashboard' }) },
+    { label: 'Growth Tracker', onClick: () => handleDownloadPdf({ type: 'accountability-tracker' }) },
+    { label: 'Money Making Plan (CFA)', onClick: () => handleDownloadPdf({ type: 'cfa-model' }) },
+    { label: 'Offer Presentation', onClick: () => handleDownloadPdf({ type: 'offer-presentation' }) },
+    { label: 'Concepts Guide', onClick: () => handleDownloadPdf({ type: 'concepts-guide' }) },
+    { label: 'Marketing: Landing Page', onClick: () => handleDownloadPdf({ type: 'landing-page' }) },
+    { label: 'Marketing: Offer Flyer', onClick: () => handleDownloadPdf({ type: 'downsell-pamphlet' }) },
+    { label: 'Marketing: Customer Follow-Up', onClick: () => handleDownloadPdf({ type: 'tripwire-followup' }) },
   ];
 
-  if (pdfGenConfig && playbook && businessData) {
-    return (
-      <div className="bg-gray-300 min-h-screen">
-        <div className="bg-gray-800 text-white p-4 flex justify-between items-center print:hidden sticky top-0 z-10 shadow-lg">
-          <h3 className="font-bold text-lg">PDF Preview</h3>
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-gray-400 hidden md:block">Use your browser's "Save as PDF" option in the print menu.</p>
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2 bg-yellow-400 text-gray-900 font-semibold rounded-md hover:bg-yellow-300 transition-colors"
-            >
-              Print / Save PDF
-            </button>
-            <button
-              onClick={() => setPdfGenConfig(null)}
-              className="px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 transition-colors"
-            >
-              Back to Plan
-            </button>
-          </div>
-        </div>
-        <div className="p-4 flex justify-center">
-            <div className="bg-white shadow-2xl">
-                 <AllPdfs playbook={playbook} businessData={businessData} {...pdfGenConfig} />
-            </div>
-        </div>
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (isLoading && generationStage !== 'fullPlan') {
+        return <ProgressBar progress={loadingProgress} loadingText={loadingText} />;
+    }
+
+    switch (generationStage) {
+        case 'instagramInput':
+            return <InstagramInputForm onSubmit={handleGenerateMiniReportFromInstagram} />;
+        case 'reviewData':
+            return <Step1Form 
+                        onSubmit={handleConfirmAndGenerateFullPlan}
+                        initialData={businessData}
+                        submitButtonText="Confirm & Generate Full Plan"
+                    />;
+        case 'miniReport':
+            return playbook?.diagnosis ? (
+                <MiniReportView
+                    diagnosis={playbook.diagnosis as GeneratedDiagnosis}
+                    onGenerateFullPlan={handleProceedToFullPlan}
+                    onDownloadReport={() => handleDownloadPdf({ type: 'mini-clarity-report' })}
+                />
+            ) : null;
+        case 'fullPlan':
+             if (isLoading) {
+                return <ProgressBar progress={loadingProgress} loadingText={loadingText} />;
+            }
+            return playbook?.accountabilityTracker && businessData ? (
+                <div>
+                    <header className="bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl mb-8 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-4 z-10 border border-gray-700">
+                        <h1 className="text-2xl font-bold text-white text-center md:text-left">Your Business Plan is Ready!</h1>
+                        <div className="flex items-center gap-2 flex-wrap justify-center">
+                            <button onClick={handleStartOver} className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors transform hover:scale-105">
+                                Start Over
+                            </button>
+                            <DropdownButton
+                                label="Download PDFs"
+                                isLoading={isDownloading}
+                                progress={downloadProgress}
+                                options={downloadOptions}
+                            />
+                            <button 
+                                onClick={handleDownloadHtml} 
+                                disabled={isDownloading}
+                                className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-500 transition-colors transform hover:scale-105 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                                {isDownloading ? <CircularProgress progress={downloadProgress} /> : 'Download HTML'}
+                            </button>
+                            <button 
+                                onClick={handleDownloadZip} 
+                                disabled={isDownloading}
+                                className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors transform hover:scale-105 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                                {isDownloading ? <CircularProgress progress={downloadProgress} /> : 'Download All (ZIP)'}
+                            </button>
+                        </div>
+                    </header>
+        
+                    <FullPlaybook 
+                        playbook={playbook as GeneratedPlaybook} 
+                        onPreviewAsset={handlePreviewAsset}
+                        chatHistory={chatHistory}
+                        isChatLoading={isChatLoading}
+                        onSendMessage={() => {}}
+                        onDownloadAssetBundle={(offer) => handleDownloadPdf({ type: 'assetBundle', assetBundle: offer })}
+                    />
+                </div>
+            ) : <ProgressBar progress={loadingProgress} loadingText={loadingText} />; // Show progress while loading full plan
+        default:
+            return <InstagramInputForm onSubmit={handleGenerateMiniReportFromInstagram} />;
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8">
       {error && <div className="bg-red-500 text-white p-4 rounded-lg mb-4 text-center">{error}</div>}
       
-      {isLoading && <ProgressBar progress={loadingProgress} loadingText={loadingText} />}
-
-      {!isLoading && !playbook && <Step1Form onSubmit={handleGeneratePlan} />}
-
-      {playbook && businessData && !isLoading && (
-        <div>
-          <header className="bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl mb-8 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-4 z-10 border border-gray-700">
-            <h1 className="text-2xl font-bold text-white text-center md:text-left">Your Business Plan is Ready!</h1>
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-                <button onClick={handleStartOver} className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors transform hover:scale-105">
-                    Start Over
-                </button>
-                <DropdownButton
-                    label="Download Options"
-                    isLoading={isDownloading && downloadProgress < 100}
-                    progress={downloadProgress}
-                    options={downloadOptions}
-                />
-                <button 
-                    onClick={handleDownloadHtml} 
-                    disabled={isDownloading}
-                    className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-500 transition-colors transform hover:scale-105 disabled:opacity-50 disabled:cursor-wait"
-                >
-                    {isDownloading ? <CircularProgress progress={downloadProgress} /> : 'Download HTML'}
-                </button>
-            </div>
-          </header>
-
-          <FullPlaybook 
-            playbook={playbook} 
-            onPreviewAsset={handlePreviewAsset}
-            chatHistory={chatHistory}
-            isChatLoading={isChatLoading}
-            onSendMessage={() => {}}
-            onDownloadAssetBundle={(offer) => setPdfGenConfig({ type: 'assetBundle', assetBundle: offer })}
-          />
-        </div>
-      )}
+      {renderContent()}
 
       {assetToPreview && (
         <OfferPreviewModal 
           asset={assetToPreview.asset!} 
           onClose={() => setAssetToPreview(null)}
-          onDownload={() => setPdfGenConfig({type: 'singleAsset', singleAsset: assetToPreview.asset!})}
+          onDownload={() => handleDownloadPdf({type: 'singleAsset', singleAsset: assetToPreview.asset!})}
         />
       )}
        {generatingAsset && (

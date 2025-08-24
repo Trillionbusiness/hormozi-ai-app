@@ -13,6 +13,7 @@ import AssetPdf from './AssetPdf';
 import LandingPagePdf from './LandingPagePdf';
 import ZipGuidePdf from './ZipGuidePdf';
 import ConceptsGuidePdf from './ConceptsGuidePdf';
+import MiniClarityReportPdf from './MiniClarityReportPdf';
 
 interface AllPdfsProps {
     playbook: GeneratedPlaybook;
@@ -32,6 +33,7 @@ const AllPdfs: React.FC<AllPdfsProps> = ({ playbook, businessData, type, assetBu
                 
                 {/* 01 Core Plan */}
                 <div data-pdf-output data-pdf-path="01_Core_Plan/Full_Business_Playbook.pdf"><FullPlaybookPdf playbook={playbook} /></div>
+                <div data-pdf-output data-pdf-path="01_Core_Plan/AI_Mini_Clarity_Report.pdf"><MiniClarityReportPdf playbook={playbook} businessData={businessData} /></div>
                 <div data-pdf-output data-pdf-path="01_Core_Plan/Business_Concepts_Guide.pdf"><ConceptsGuidePdf playbook={playbook} businessData={businessData} /></div>
                 <div data-pdf-output data-pdf-path="01_Core_Plan/Business_Scorecard_(KPIs).pdf"><KpiDashboardPdf kpiDashboard={playbook.kpiDashboard} /></div>
                 <div data-pdf-output data-pdf-path="01_Core_Plan/Growth_Experiment_Tracker.pdf"><AccountabilityTrackerPdf tracker={playbook.accountabilityTracker} /></div>
@@ -88,6 +90,7 @@ const AllPdfs: React.FC<AllPdfsProps> = ({ playbook, businessData, type, assetBu
         case 'downsell-pamphlet': return <DownsellPamphletPdf downsell={playbook.downsell} />;
         case 'tripwire-followup': return <TripwireFollowupPdf downsell={playbook.downsell} gso={playbook.offer1} />;
         case 'cfa-model': return <CfaModelPdf moneyModel={playbook.moneyModel} />;
+        case 'mini-clarity-report': return <MiniClarityReportPdf playbook={playbook} businessData={businessData} />;
         default: return null;
     }
 };

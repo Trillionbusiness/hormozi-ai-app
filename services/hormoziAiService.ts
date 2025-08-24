@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse, Content } from "@google/genai";
 import { 
     BusinessData, GeneratedPlaybook, OfferStackItem, GeneratedDiagnosis, 
@@ -26,7 +27,6 @@ const getAiInstance = (): GoogleGenAI => {
         throw new Error(`AI Service failed to initialize: ${initializationError}`);
     }
     if (!ai) {
-        // This case should theoretically be caught by the initializationError check, but it's here for safety.
         throw new Error("AI client is not available. Initialization may have failed silently.");
     }
     return ai;
@@ -332,7 +332,7 @@ Most people fail because they marry their ideas. Winners date their ideas. Run s
 Mozi Minute: Messy Action > Perfect Inaction.
 The goal isn't to get it right, it's to get it going. Your first plan will be wrong. That's fine. The market will tell you what's right, but only after you take action. Go get feedback from the market with your wallet, not your feelings.
 
---- NEW PRINCIPLES FROM 'THE NEW SECRET CHAPTER' ---
+--- NEW PRINCIPLES FROM '$100M LOST CHAPTERS' ---
 
 Words I like: If you want to make money fast, ironically, many times it comes fastest from giving things away. Those who give the most, get the most.
 
@@ -366,6 +366,42 @@ The biggest benefit of a small discount offer (e.g., $19 for a consultation) isn
 
 
 // --- SCHEMAS ---
+
+const businessDataSchema = {
+    type: Type.OBJECT,
+    properties: {
+        country: { type: Type.STRING },
+        currency: { type: Type.STRING },
+        businessType: { type: Type.STRING },
+        location: { type: Type.STRING },
+        monthlyRevenue: { type: Type.STRING },
+        employees: { type: Type.STRING },
+        marketingMethods: { type: Type.STRING },
+        biggestChallenge: { type: Type.STRING },
+        coreOffer: { type: Type.STRING },
+        targetClient: { type: Type.STRING },
+        offerTimeline: { type: Type.STRING },
+        hasSalesTeam: { type: Type.STRING },
+        monthlyAdSpend: { type: Type.STRING },
+        profitGoal: { type: Type.STRING },
+        hasCertifications: { type: Type.STRING },
+        hasTestimonials: { type: Type.STRING },
+        physicalCapacity: { type: Type.STRING },
+        ancillaryProducts: { type: Type.STRING },
+        perceivedMaxPrice: { type: Type.STRING },
+        dailyTimeCommitment: { type: Type.STRING },
+        businessStage: { type: Type.STRING, description: "Must be 'new' or 'existing'" },
+        fundingStatus: { type: Type.STRING, description: "Must be 'funded' or 'bootstrapped', or an empty string if businessStage is 'existing'" },
+    },
+    required: [
+        'country', 'currency', 'businessType', 'location', 'monthlyRevenue',
+        'employees', 'marketingMethods', 'biggestChallenge', 'coreOffer',
+        'targetClient', 'offerTimeline', 'hasSalesTeam', 'monthlyAdSpend',
+        'profitGoal', 'hasCertifications', 'hasTestimonials', 'physicalCapacity',
+        'ancillaryProducts', 'perceivedMaxPrice', 'dailyTimeCommitment',
+        'businessStage', 'fundingStatus'
+    ]
+};
 
 const offerSchema = {
     type: Type.OBJECT,
@@ -798,6 +834,15 @@ Business Data:
 
 // --- EXPORTED GENERATION FUNCTIONS ---
 
+export const generateBusinessDataFromInstagram = async (url: string): Promise<BusinessData> => {
+    const prompt = `You are an expert business analyst. Your task is to analyze an Instagram profile and extract key business information to populate a JSON object.
+
+Instagram Profile URL: ${url}
+
+Based on the profile's bio, recent posts (content, captions, hashtags), and overall theme, fill out the following JSON object. Make intelligent inferences where information is not explicit. For financial data, provide reasonable estimates based on the perceived scale and niche of the business. Do not leave any fields blank; use your best judgment to provide a complete profile. If a field like 'fundingStatus' is not applicable (e.g., for an existing business), return an empty string. Default to USD and United States if the location is unclear.`;
+    return generate<BusinessData>(prompt, businessDataSchema);
+};
+
 export const generateDiagnosis = async (data: BusinessData): Promise<GeneratedDiagnosis> => {
     const prompt = `${createBusinessContextPrompt(data)}\nTASK: Based on the business data, provide a diagnosis using Alex Hormozi's stages of business growth. Identify their current stage, their primary role, their top 3-4 constraints, and the top 3-4 actions they must take to get to the next stage. Be brutally honest and direct.`;
     return generate<GeneratedDiagnosis>(prompt, diagnosisSchema);
@@ -914,7 +959,6 @@ const generateSimpleText = async (prompt: string): Promise<string> => {
 };
 
 export const generateFieldSuggestion = async (data: Partial<BusinessData>, fieldName: keyof BusinessData): Promise<string> => {
-    // Sanitize data: remove empty fields to keep the prompt clean
     const contextData = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => value && key !== fieldName)
     );
@@ -944,7 +988,6 @@ Do not add any extra explanation, labels, or quotation marks. Just return the pu
 Suggestion for "${fieldLabel}":
 `;
     const suggestion = await generateSimpleText(prompt);
-    // Sometimes the model might still return quotes, so let's strip them.
     return suggestion.replace(/^"|"$/g, '');
 };
 
@@ -955,7 +998,6 @@ export const generateChatResponseStream = async (
     history: ChatMessage[]
 ) => {
     const ai = getAiInstance();
-    // Convert history to a simple string format for the prompt
     const formattedHistory = history.map(msg => `${msg.role === 'user' ? 'AI' : 'AI'}: ${msg.content}`).join('\n\n');
 
     const prompt = `
