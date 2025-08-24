@@ -444,10 +444,22 @@ const diagnosisSchema = {
         currentStage: { type: Type.STRING },
         yourRole: { type: Type.STRING },
         constraints: { type: Type.ARRAY, items: { type: Type.STRING } },
-        actions: { type: Type.ARRAY, items: { type: Type.STRING } }
+        actions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        freeValueAsset: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING, description: "A compelling name for the free, tangible asset, e.g., 'The 5 New Clients in 5 Days Script Pack'." },
+                rationale: { type: Type.STRING, description: "The strategic rationale explaining why this specific asset is the single most valuable thing to give away to solve their biggest problem." },
+                assetType: { type: Type.STRING, description: "The type of asset, e.g., 'template', 'framework', 'checklist', 'script', 'guide'." },
+                assetContent: { type: Type.STRING, description: "The FULL, ready-to-use text content of the asset itself, formatted in simple Markdown." }
+            },
+            required: ["name", "rationale", "assetType", "assetContent"]
+        },
+        outreachScriptForUser: { type: Type.STRING, description: "A ready-to-use, personalized cold outreach script (DM/email) for the APP USER to send to THIS BUSINESS. This script offers them the Mini Clarity Report containing the free asset." }
     },
-    required: ["currentStage", "yourRole", "constraints", "actions"]
+    required: ["currentStage", "yourRole", "constraints", "actions", "freeValueAsset", "outreachScriptForUser"]
 };
+
 
 const modelComparisonSchema = {
     type: Type.OBJECT,
@@ -844,9 +856,28 @@ Based on the profile's bio, recent posts (content, captions, hashtags), and over
 };
 
 export const generateDiagnosis = async (data: BusinessData): Promise<GeneratedDiagnosis> => {
-    const prompt = `${createBusinessContextPrompt(data)}\nTASK: Based on the business data, provide a diagnosis using Alex Hormozi's stages of business growth. Identify their current stage, their primary role, their top 3-4 constraints, and the top 3-4 actions they must take to get to the next stage. Be brutally honest and direct.`;
+    const prompt = `${createBusinessContextPrompt(data)}\n
+TASK: You are creating a "Mini Clarity Report" for this business. This report is a high-value, free deliverable designed to build massive trust and lead to a sale of your (the consultant's) services. It must contain a tangible, ready-to-use "crown jewel" asset that DIRECTLY solves their biggest challenge: "${data.biggestChallenge}".
+
+**Core Strategy:**
+Your goal is to demonstrate overwhelming value and competence. You do this not by giving advice, but by giving a weapon.
+1.  First, you will conceptualize a perfect, low-cost "Hello Offer" for this business.
+2.  Then, you will identify the single most valuable, tangible asset from that offer—its "crown jewel."
+3.  Finally, you will generate the FULL content for that crown jewel asset. This asset is the core of the free report.
+
+Based on this strategy, generate the following JSON:
+
+-   **Diagnosis:** (currentStage, yourRole, constraints, actions) - A quick, sharp diagnosis of the business's situation.
+-   **freeValueAsset:**
+    -   \`name\`: A compelling, results-oriented name for the free asset itself. Example: "The 'Book 5 New Clients This Week' DM Scripts".
+    -   \`rationale\`: Explain to the business owner why this specific asset is the key to solving their biggest problem right now.
+    -   \`assetType\`: The type of asset ('script', 'template', 'checklist', etc.).
+    -   \`assetContent\`: The FULL, ready-to-use text content of the asset itself. This is not a description; it IS the asset. Format it in simple Markdown. It should be immediately useful.
+-   **outreachScriptForUser:** This is critical. This is the cold outreach script FOR THE APP USER (the person using this software) to send TO THE BUSINESS OWNER they just analyzed. This script offers the business owner the "Mini Clarity Report" which contains the valuable asset. It should create intrigue and highlight the value.
+`;
     return generate<GeneratedDiagnosis>(prompt, diagnosisSchema);
 };
+
 
 export const generateMoneyModelAnalysis = async (data: BusinessData): Promise<GeneratedMoneyModelAnalysis> => {
     const prompt = `${createBusinessContextPrompt(data)}\nTASK: Analyze the business's current money model and propose a new, more effective one based on Hormozi's principles. Compare the 'Old Model' vs. 'New Model'. Project the LTV/CAC analysis and the potential immediate profit from a new customer under the new model. Be specific with numbers, making reasonable assumptions where necessary.`;

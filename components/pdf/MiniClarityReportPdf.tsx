@@ -20,40 +20,56 @@ const MiniClarityReportPdf: React.FC<MiniClarityReportPdfProps> = ({ businessDat
         <div className="p-12 bg-white font-sans text-gray-900">
             <header className="text-center mb-8 pb-4 border-b-4 border-yellow-400">
                 <p className="text-yellow-500 font-bold uppercase tracking-widest">Your Free</p>
-                <Title>AI Mini Business Clarity Report</Title>
-                <Subtitle>A quick analysis for your <strong className="text-gray-800">{businessData.businessType}</strong>.</Subtitle>
+                <Title>Mini Clarity Report</Title>
+                <Subtitle>A custom-built, high-value asset for your <strong className="text-gray-800">{businessData.businessType}</strong>.</Subtitle>
             </header>
 
             <main>
-                <P>This report is designed to give you immediate clarity. We've analyzed the information you provided to identify the biggest things holding you back and the most important actions you can take right now to move forward.</P>
+                <P>This report is designed to give you an immediate, actionable tool. We've analyzed your business to create a powerful asset you can use right now to start getting results.</P>
                 
-                <SectionTitle>Your Biggest Growth Opportunities (The "Stuck Points")</SectionTitle>
-                <P>Every business has bottlenecks. Based on our analysis, these are the primary constraints slowing down your growth. Solving these is your top priority.</P>
-                <div className="space-y-3 mt-4">
-                    {diagnosis.constraints.map((constraint, i) => (
-                        <div key={i} className="p-4 bg-red-50 border-l-4 border-red-400">
-                            <p className="text-red-800 font-semibold text-lg">{constraint}</p>
-                        </div>
-                    ))}
+                <SectionTitle>Part 1: The Quick Diagnosis</SectionTitle>
+                <div className="grid grid-cols-2 gap-6">
+                    <div>
+                        <h3 className="font-bold text-lg text-gray-800">Your Biggest "Stuck Points"</h3>
+                        <P className="text-sm">These are the problems your new free asset will help solve.</P>
+                        <ul className="list-disc list-inside space-y-2 mt-2">
+                            {diagnosis.constraints.map((constraint, i) => (
+                                <li key={i} className="text-red-800 font-semibold">{constraint}</li>
+                            ))}
+                        </ul>
+                    </div>
+                     <div>
+                        <h3 className="font-bold text-lg text-gray-800">Your First Action Steps</h3>
+                        <P className="text-sm">This is the path forward. Notice how this asset helps with step #1.</P>
+                        <ul className="list-decimal list-inside space-y-2 mt-2">
+                            {diagnosis.actions.map((action, i) => (
+                                <li key={i} className="text-green-800 font-semibold">{action}</li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
 
-                <SectionTitle>Your First 3 Action Steps</SectionTitle>
-                <P>Don't try to do everything at once. Focus is key. Here are the simple, high-impact steps to take to start making progress immediately.</P>
-                 <div className="space-y-3 mt-4">
-                    {diagnosis.actions.slice(0, 3).map((action, i) => (
-                         <div key={i} className="flex items-start p-4 bg-green-50 border-l-4 border-green-500">
-                            <div className="flex-shrink-0 text-2xl font-bold text-green-700 mr-3">{i + 1}.</div>
-                            <p className="text-green-800 font-semibold text-lg">{action}</p>
-                        </div>
-                    ))}
+                <SectionTitle>Part 2: Your "Crown Jewel" Free Asset</SectionTitle>
+                <div className="p-6 bg-gray-50 border-2 border-gray-200 rounded-lg">
+                    <h3 className="text-xl font-bold text-gray-800">The Rationale (Why This is So Valuable)</h3>
+                    <P>{diagnosis.freeValueAsset.rationale}</P>
                 </div>
+                
+                <div className="mt-6 p-6 bg-blue-50 border-l-8 border-blue-300 rounded-r-lg">
+                    <h3 className="text-xl font-bold text-blue-800">{diagnosis.freeValueAsset.name}</h3>
+                    <P>Here is your complete, ready-to-use asset:</P>
+                    <pre className="mt-4 p-4 bg-white border border-blue-200 rounded-md text-sm text-gray-700 whitespace-pre-wrap font-sans">
+                        {diagnosis.freeValueAsset.assetContent}
+                    </pre>
+                </div>
+
             </main>
 
             <footer className="mt-12 pt-8 border-t-4 border-yellow-400 text-center">
                 <h3 className="text-2xl font-bold text-gray-800">This is Just the Beginning...</h3>
-                <P>This mini-report is just a tiny glimpse of what's possible. Your full, personalized business playbook contains the complete step-by-step plans, offers, marketing materials, and tools you need to achieve your goals.</P>
+                <P>This free asset is just the hook. A full, personalized business playbook can provide the complete step-by-step plans, irresistible core offers, and marketing materials you need to achieve your goals.</P>
                 <div className="mt-4 p-4 bg-yellow-400 text-gray-900 font-bold text-xl rounded-lg">
-                    Ready to unlock your full plan? Get started today!
+                    Ready to grow? Let's build your full plan!
                 </div>
             </footer>
         </div>

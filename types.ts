@@ -25,11 +25,20 @@ export interface BusinessData {
   category?: string;
 }
 
+export interface FreeValueAsset {
+    name: string; // e.g., "The '5 New Clients in 5 Days' Outreach Script Pack"
+    rationale: string; // The explanation of why this specific asset is so valuable for the business's current problem.
+    assetType: 'template' | 'framework' | 'checklist' | 'script' | 'guide'; // Type of asset
+    assetContent: string; // The full text content of the asset itself.
+}
+
 export interface GeneratedDiagnosis {
   currentStage: string;
   yourRole: string;
   constraints: string[];
   actions: string[];
+  freeValueAsset: FreeValueAsset;
+  outreachScriptForUser: string; // The outreach script for the app user to send to their prospect.
 }
 
 export interface ModelComparison {
